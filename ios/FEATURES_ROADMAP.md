@@ -187,7 +187,9 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
    CoreText-font touchpoints (`d_macView`, `GuiCocoaDrawingArea`, `NSGraphicsContext`, `NSFontManager`).
    That's a self-contained but non-trivial subsystem port — the right next big effort.
 5. **eSpeak "Speak" feature (T1)** — quick, high-delight.
-6. **Shared tier editor + full TextGrid editor (T3)** — the most-used interactive editing.
+6. **Shared tier editor + full TextGrid editor (T3)** — *TextGrid editor done* (multi interval/point
+   tiers, boundaries at cursor, labels, `.TextGrid` export). *Still open:* the shared **curve** tier
+   editor (drag Pitch/Intensity/Duration points).
 7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — flagship native editors.
 
 Items 1–3 and 5 are bounded and expose the vast majority of Praat's value; 4 is the big multiplier for

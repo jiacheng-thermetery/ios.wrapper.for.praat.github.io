@@ -31,7 +31,7 @@ xcrun --sdk $SDK swiftc -sdk "$SDKPATH" -target $TGT -O \
   -import-objc-header ios/app/Spraak-Bridging-Header.h -I ios/app \
   ios/app/PraatApp.swift ios/app/ContentView.swift ios/app/PraatModel.swift \
   ios/app/AudioEngine.swift ios/app/SpectrogramView.swift ios/app/SettingsView.swift \
-  ios/app/ObjectsView.swift ios/app/CommandForms.swift \
+  ios/app/ObjectsView.swift ios/app/CommandForms.swift ios/app/TextGridEditor.swift \
   -o "$APPDIR/Spraak" \
   ios/app/PraatBridge.o ios/pa_ios_hostapis.o $LIBS \
   -framework CoreFoundation -framework Accelerate -framework Metal -framework Foundation \

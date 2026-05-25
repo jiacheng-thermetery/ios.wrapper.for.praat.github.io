@@ -31,8 +31,9 @@ struct AnalyzeView: View {
     @State private var cursorTime: Double?
     @State private var selection: TimeRange?
     @State private var slice: PraatModel.Slice?
-    @State private var annotations: [Annotation] = []
-    @State private var selectedAnnotation: UUID?
+    @State private var tiers: [TGTier] = [TGTier(name: "phones", isInterval: true),
+                                          TGTier(name: "words", isInterval: true)]
+    @State private var selectedMark: TGMarkRef?
     @State private var zoomHistory: [TimeRange] = []
     @State private var cursorValues: PraatModel.CursorValues?
 
@@ -65,11 +66,11 @@ struct AnalyzeView: View {
                     .frame(minHeight: 190)
                 timeAxis
                 if let cv = cursorValues { cursorReadout(cv) }
-                AnnotationTierView(annotations: $annotations, selected: $selectedAnnotation,
-                                   viewStart: model.viewStart, viewEnd: model.viewEnd, duration: model.duration)
-                    .frame(height: 38)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.gray.opacity(0.4)))
-                annotationEditor
+                tierControls
+                TextGridTiersView(tiers: $tiers, selected: $selectedMark,
+                                  viewStart: model.viewStart, viewEnd: model.viewEnd)
+                    .frame(height: CGFloat(tiers.count) * 36)
+                markEditor
                 if let s = slice, let t = cursorTime { SpectrumSliceView(slice: s, time: t) }
             } else {
                 Spacer()
@@ -217,13 +218,31 @@ struct AnalyzeView: View {
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(.gray.opacity(0.4)))
     }
 
-    @ViewBuilder private var annotationEditor: some View {
-        if let id = selectedAnnotation, let idx = annotations.firstIndex(where: { $0.id == id }) {
+    private var tierControls: some View {
+        HStack(spacing: 8) {
+            Text("Tiers").font(.caption2).foregroundStyle(.secondary)
+            Button { tiers.append(TGTier(name: "tier\(tiers.count + 1)", isInterval: true)) }
+                label: { Label("Interval", systemImage: "plus") }
+            Button { tiers.append(TGTier(name: "points\(tiers.count + 1)", isInterval: false)) }
+                label: { Label("Point", systemImage: "plus") }
+            Spacer()
+            Button { exportTextGrid() } label: { Label("TextGrid", systemImage: "square.and.arrow.up") }
+                .disabled(tiers.allSatisfy { $0.marks.isEmpty })
+        }
+        .buttonStyle(.bordered).controlSize(.mini).font(.caption2)
+    }
+
+    @ViewBuilder private var markEditor: some View {
+        if let ref = selectedMark,
+           let ti = tiers.firstIndex(where: { $0.id == ref.tier }),
+           let mi = tiers[ti].marks.firstIndex(where: { $0.id == ref.mark }) {
             HStack {
-                Text(String(format: "%.3f s", annotations[idx].start)).font(.caption2).foregroundStyle(.secondary)
-                TextField("label", text: $annotations[idx].label)
+                Text("\(tiers[ti].name) @ \(String(format: "%.3f s", tiers[ti].marks[mi].time))")
+                    .font(.caption2).foregroundStyle(.secondary)
+                TextField("label", text: $tiers[ti].marks[mi].label)
                     .textFieldStyle(.roundedBorder).font(.callout)
-                Button(role: .destructive) { annotations.remove(at: idx); selectedAnnotation = nil }
+                    .autocorrectionDisabled().textInputAutocapitalization(.never)
+                Button(role: .destructive) { tiers[ti].marks.remove(at: mi); selectedMark = nil }
                     label: { Image(systemName: "trash") }
             }
         }
@@ -243,6 +262,14 @@ struct AnalyzeView: View {
     private func openFile(_ url: URL) {
         guard let (s, r) = AudioEngine.decode(url: url) else { return }
         samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+    }
+
+    /// Export the annotation tiers as a Praat .TextGrid file and present the share sheet.
+    private func exportTextGrid() {
+        let text = TextGridIO.textGrid(tiers: tiers, xmin: 0, xmax: model.duration)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("annotation.TextGrid")
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+        pictureExport = ExportItem(url: url)   // reuse the share sheet
     }
 
     /// Synthesize speech with eSpeak (via the engine), then load it into the Analyze view.
@@ -265,7 +292,9 @@ struct AnalyzeView: View {
         }
     }
     private func resetAnalysis() {
-        cursorTime = nil; selection = nil; slice = nil; annotations = []; selectedAnnotation = nil; zoomHistory = []
+        cursorTime = nil; selection = nil; slice = nil; zoomHistory = []
+        tiers = [TGTier(name: "phones", isInterval: true), TGTier(name: "words", isInterval: true)]
+        selectedMark = nil
     }
 
     private func zoomCenter() -> Double {
