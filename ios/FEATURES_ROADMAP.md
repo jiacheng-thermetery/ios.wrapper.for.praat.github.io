@@ -212,3 +212,27 @@ and 5 were bounded and expose the vast majority of Praat's value; 4 is the big m
 visualisation; 6–7 are the marquee interactive editors. What remains is the explicitly-niche long tail
 catalogued in §9 (KlattGrid / OT-grammar / Table-Matrix-Strings grid editors and a full Spectrum band
 editor) — none are blockers, and every one is already usable through the Script tab today.
+
+## 15. Usability pass (2026-05-25) — all done
+
+A round of touch/UX fixes after device testing. The **Analyze** tab and the **Objects** window now share
+one engine, so sounds flow between them.
+
+1. **Analyze toolbar reordered by use** — `Audio · Record · Time · Speak · Demo` (then Open/settings/export);
+   **Record** is also added to the Objects **New** menu (`Record mono Sound…`), as in desktop Praat.
+2. **Salient recording indicator** — `RecordingBanner` (pulsing red dot, elapsed `m:ss`, live input-level
+   meter) overlays the top of Analyze and Objects while recording; `AudioEngine` now publishes
+   `recordSeconds`/`recordLevel`.
+3. **Objects ↔ Analyze bridge** — new bridge calls `praatios_addSoundObject` (Analyze record/open/speak now
+   add a selected Sound to the object list) and `praatios_selectedSoundPCM` (Objects' new **Analyze** button
+   sends the selected Sound to the Analyze tab). A shared `AppStore` carries the tab selection + hand-off.
+   Verified on-engine (`ios/app/test_bridge.mm`): add→select→read round-trips samples exactly and selection
+   follows the newest object.
+4. **Manipulation defaults to 8 points** (was ~116) — `ManipulationView.downsample(_:to:)` keeps the contour
+   shape with few, easily-draggable points on a phone.
+5. **Landscape scrolling** — the Analyze view is wrapped in a `ScrollView`, so the cursor read-out, tiers,
+   and spectral slice are reachable when the spectrogram fills a short landscape viewport.
+6. **Filters / convert / combine exposed** — Sound command forms gain Filter (pass/stop Hann band, i.e.
+   low-/high-/band-pass), Resample, Scale peak/intensity; the palette gains Convert to mono/stereo; a new
+   **Combine** menu does Combine-to-stereo / Concatenate on a multi-Sound selection. Verified on-engine
+   (`ios/app/test_cmds.mm`): every command string runs without error and produces the expected object.

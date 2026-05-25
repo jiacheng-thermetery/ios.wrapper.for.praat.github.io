@@ -132,9 +132,17 @@ struct ManipulationView: View {
             }
         }
         duration = praatios_soundDuration()
-        points = (0..<n).map { TierPoint(time: t[$0], value: v[$0]) }
+        let all = (0..<n).map { TierPoint(time: t[$0], value: v[$0]) }
+        points = Self.downsample(all, to: 8)     // [iOS port] few, well-spaced points are draggable on a phone
         status = n > 0 ? "" : "Could not create a Manipulation."
         resynth()
+    }
+
+    /// Reduce a dense pitch tier to at most `k` evenly-spaced points (keeping the first and last),
+    /// so the contour is easy to grab and drag on a touch screen.
+    static func downsample(_ pts: [TierPoint], to k: Int) -> [TierPoint] {
+        guard pts.count > k, k >= 2 else { return pts }
+        return (0 ..< k).map { i in pts[Int((Double(i) * Double(pts.count - 1) / Double(k - 1)).rounded())] }
     }
 
     private func flatten() { for i in points.indices { points[i].value = 200 }; resynth(); audio.play(lastSamples, rate: rate) }

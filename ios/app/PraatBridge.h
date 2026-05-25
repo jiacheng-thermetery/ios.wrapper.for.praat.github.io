@@ -46,6 +46,13 @@ int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */
 double praatios_soundSampleRate (void);
 
+/* [iOS port] Bridge the Analyze tab and the Objects window (one shared engine):
+ * addSoundObject puts a recorded/opened/spoken sound into the engine object list as a Sound
+ * and selects it (returns the new object id, 0 on failure); selectedSoundPCM copies the first
+ * selected Sound object's samples (mixed to mono) out so it can be sent to the Analyze tab. */
+int praatios_addSoundObject (const float *samples, int count, double sampleRate, const char *name);
+int praatios_selectedSoundPCM (float *out, int maxSamples, double *outRate);
+
 /* Waveform of [t0,t1], downsampled to `n` peak-preserving (min,max) pairs. */
 int    praatios_waveform (double t0, double t1, int n, float *outMin, float *outMax);
 

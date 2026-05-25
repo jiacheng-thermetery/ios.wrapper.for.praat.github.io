@@ -3,11 +3,32 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// A request to load a sound into the Analyze tab (e.g. "Analyze" on a selected Sound object).
+struct AnalyzeRequest: Equatable {
+    let id = UUID()
+    var samples: [Float]
+    var rate: Double
+    var name: String
+    static func == (a: AnalyzeRequest, b: AnalyzeRequest) -> Bool { a.id == b.id }
+}
+
+/// App-wide state shared across tabs: the selected tab (so we can switch programmatically)
+/// and a pending request to hand a sound from the Objects window to the Analyze tab.
+@MainActor final class AppStore: ObservableObject {
+    @Published var tab = 0
+    @Published var analyzeRequest: AnalyzeRequest?
+
+    func sendToAnalyze(_ samples: [Float], rate: Double, name: String) {
+        analyzeRequest = AnalyzeRequest(samples: samples, rate: rate, name: name)
+        tab = 0
+    }
+}
+
 struct ContentView: View {
+    @StateObject private var store = AppStore()
     @State private var showAbout = false
-    @State private var tab = 0
     var body: some View {
-        TabView(selection: $tab) {
+        TabView(selection: $store.tab) {
             AnalyzeView().tabItem { Label("Analyze", systemImage: "waveform") }.tag(0)
             ObjectsView().tabItem { Label("Objects", systemImage: "list.bullet") }.tag(1)
             VowelView().tabItem { Label("Vowel", systemImage: "mouth") }.tag(2)
@@ -15,6 +36,7 @@ struct ContentView: View {
             ExperimentMFCView().tabItem { Label("Experiment", systemImage: "checklist") }.tag(4)
             ScriptConsoleView().tabItem { Label("Script", systemImage: "terminal") }.tag(5)
         }
+        .environmentObject(store)
         .overlay(alignment: .topTrailing) {
             Button { showAbout = true } label: { Image(systemName: "info.circle") }
                 .padding(.top, 6).padding(.trailing, 12)
@@ -26,6 +48,7 @@ struct ContentView: View {
 // MARK: - Analyze
 
 struct AnalyzeView: View {
+    @EnvironmentObject private var store: AppStore
     @StateObject private var model = PraatModel()
     @StateObject private var audio = AudioEngine()
 
@@ -58,34 +81,45 @@ struct AnalyzeView: View {
     @State private var speakVoice = "Female1"
 
     var body: some View {
-        VStack(spacing: 6) {
-            topControls
-            overlayToggles
+        ScrollView {                       // [iOS port] scrollable so all panels are reachable in landscape
+            VStack(spacing: 6) {
+                topControls
+                overlayToggles
 
-            if model.hasSound {
-                waveform.frame(height: 52)
-                SpectrogramView(model: model, cursorTime: $cursorTime, selection: $selection,
-                                showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
-                    .frame(minHeight: 190)
-                timeAxis
-                if let cv = cursorValues { cursorReadout(cv) }
-                tierControls
-                TextGridTiersView(tiers: $tiers, selected: $selectedMark,
-                                  viewStart: model.viewStart, viewEnd: model.viewEnd)
-                    .frame(height: CGFloat(tiers.count) * 36)
-                markEditor
-                if let s = slice, let t = cursorTime { SpectrumSliceView(slice: s, time: t) }
-            } else {
-                Spacer()
-                Text("Tap ● Record (or ▶︎ Demo) to analyse a sound.")
-                    .font(.callout).foregroundStyle(.secondary)
-                Spacer()
+                if model.hasSound {
+                    waveform.frame(height: 52)
+                    SpectrogramView(model: model, cursorTime: $cursorTime, selection: $selection,
+                                    showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
+                        .frame(minHeight: 190)
+                    timeAxis
+                    if let cv = cursorValues { cursorReadout(cv) }
+                    tierControls
+                    TextGridTiersView(tiers: $tiers, selected: $selectedMark,
+                                      viewStart: model.viewStart, viewEnd: model.viewEnd)
+                        .frame(height: CGFloat(tiers.count) * 36)
+                    markEditor
+                    if let s = slice, let t = cursorTime { SpectrumSliceView(slice: s, time: t) }
+                } else {
+                    Text("Tap ● Record (or ▶︎ Demo) to analyse a sound.")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 240)
+                }
+            }
+            .padding(8)
+        }
+        .overlay(alignment: .top) {
+            if audio.isRecording {
+                RecordingBanner(seconds: audio.recordSeconds, level: audio.recordLevel)
+                    .padding(.top, 8).padding(.horizontal, 16).transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(8)
+        .animation(.default, value: audio.isRecording)
         .onChange(of: cursorTime) { _, t in
             if let t { slice = model.spectrumSlice(at: t); cursorValues = model.valuesAt(t) }
             else { slice = nil; cursorValues = nil }
+        }
+        .onChange(of: store.analyzeRequest) { _, req in
+            if let req { loadFromObjects(req) }
         }
         .sheet(isPresented: $showZoomDialog) {
             TimeRangeDialog(title: "Zoom", actionLabel: "Zoom", from: $dlgFrom, to: $dlgTo) { a, b in
@@ -117,19 +151,20 @@ struct AnalyzeView: View {
 
     // MARK: controls
 
+    // [iOS port] Ordered by actual use: play (audio) · record · time · speak · demo, then open/settings/export.
     private var topControls: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                audioMenu
                 Button { record() } label: {
                     Label(audio.isRecording ? "Stop" : "Record",
                           systemImage: audio.isRecording ? "stop.circle.fill" : "record.circle")
                         .foregroundStyle(audio.isRecording ? .red : .primary)
                 }
-                Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
-                Button { showSpeak = true } label: { Label("Speak", systemImage: "text.bubble") }
-                Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
                 timeMenu
-                audioMenu
+                Button { showSpeak = true } label: { Label("Speak", systemImage: "text.bubble") }
+                Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
+                Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
                 Button { settings = model.settings; showSettings = true } label: { Image(systemName: "gearshape") }
                 Button { exportPicture() } label: { Image(systemName: "square.and.arrow.up") }
                     .disabled(!model.hasSound)
@@ -171,6 +206,13 @@ struct AnalyzeView: View {
             Toggle(isOn: $showPitch) { Text("Pitch").foregroundStyle(.cyan) }
             Toggle(isOn: $showFormants) { Text("Formants").foregroundStyle(.red) }
             Toggle(isOn: $showIntensity) { Text("Intensity").foregroundStyle(.orange) }
+            Spacer()
+            Button { quickPlay() } label: {
+                Label(audio.isPlaying ? "Stop" : "Play",
+                      systemImage: audio.isPlaying ? "stop.fill" : "play.fill")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.small).font(.caption)
+            .disabled(!model.hasSound)
         }
         .toggleStyle(.button).controlSize(.small).font(.caption)
     }
@@ -253,18 +295,30 @@ struct AnalyzeView: View {
 
     // MARK: actions
 
+    /// Load PCM into the Analyze view. If `pushToObjects`, also add it to the engine object
+    /// list so it appears in the Objects window (the two tabs share one engine).
+    private func setAnalysisSound(_ s: [Float], _ r: Double, name: String, pushToObjects: Bool) {
+        samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+        if pushToObjects {
+            _ = s.withUnsafeBufferPointer { praatios_addSoundObject($0.baseAddress, Int32(s.count), r, name) }
+        }
+    }
     private func record() {
         audio.toggleRecording { captured, sr in
             guard !captured.isEmpty else { return }
-            samples = captured; rate = sr; resetAnalysis(); model.setSamples(captured, rate: sr)
+            setAnalysisSound(captured, sr, name: "recording", pushToObjects: true)
         }
     }
     private func loadDemo() {
-        let (s, r) = DemoSound.vowel(); samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+        let (s, r) = DemoSound.vowel(); setAnalysisSound(s, r, name: "vowel", pushToObjects: false)
     }
     private func openFile(_ url: URL) {
         guard let (s, r) = AudioEngine.decode(url: url) else { return }
-        samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+        setAnalysisSound(s, r, name: url.deletingPathExtension().lastPathComponent, pushToObjects: true)
+    }
+    /// A sound handed over from the Objects window — already an engine object, so don't re-add it.
+    private func loadFromObjects(_ req: AnalyzeRequest) {
+        setAnalysisSound(req.samples, req.rate, name: req.name, pushToObjects: false)
     }
 
     /// Export the annotation tiers as a Praat .TextGrid file and present the share sheet.
@@ -291,7 +345,7 @@ struct AnalyzeView: View {
         """
         _ = String(cString: praatios_run(script))
         if let (s, r) = AudioEngine.decode(url: url) {
-            samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+            setAnalysisSound(s, r, name: "speech", pushToObjects: true)
         }
     }
     private func resetAnalysis() {
@@ -318,6 +372,18 @@ struct AnalyzeView: View {
     }
     private func playOrStop() { if audio.isPlaying { audio.stopPlayback() } else { audio.play(samples, rate: rate, from: model.viewStart, to: model.viewEnd) } }
     private func playSelection() { if let s = selection { audio.play(samples, rate: rate, from: s.lo, to: s.hi) } }
+
+    /// Quick Play (next to the overlay toggles): the selection if one exists, otherwise from the
+    /// cursor (or the window start) to the end of the visible window. Tapping again stops.
+    private func quickPlay() {
+        if audio.isPlaying { audio.stopPlayback(); return }
+        if let s = selection {
+            audio.play(samples, rate: rate, from: s.lo, to: s.hi)
+        } else {
+            let from = max(model.viewStart, min(cursorTime ?? model.viewStart, model.viewEnd))
+            audio.play(samples, rate: rate, from: from, to: model.viewEnd)
+        }
+    }
 
     /// Render the spectrogram + overlays to a PNG and present the share sheet ("export the picture").
     @MainActor private func exportPicture() {

@@ -174,6 +174,48 @@ double praatios_soundSampleRate (void) {
 	return theSound. get() ? 1.0 / theSound -> dx : 0.0;
 }
 
+/* [iOS port] Add mono PCM to the engine object list as a Sound and select it, so a sound
+ * recorded/opened/spoken in the Analyze tab also shows up in the Objects window (one shared
+ * engine). praat_new marks it "being created"; praat_updateSelection then selects it. */
+int praatios_addSoundObject (const float *samples, int count, double sampleRate, const char *name) {
+	praatios_init ();
+	if (count <= 0 || sampleRate <= 0.0) return 0;
+	try {
+		const double dx = 1.0 / sampleRate;
+		autoSound s = Sound_create (1, 0.0, count * dx, count, dx, 0.5 * dx);
+		for (int i = 0; i < count; i ++)
+			s -> z [1] [i + 1] = samples [i];
+		autostring32 nm = Melder_8to32_e (name && name [0] ? name : "sound");
+		praat_new (s.move(), nm.get());
+		praat_updateSelection ();
+		return theCurrentPraatObjects -> n >= 1
+			? (int) theCurrentPraatObjects -> list [theCurrentPraatObjects -> n]. id : 0;
+	} catch (MelderError) { Melder_clearError (); return 0; }
+}
+
+/* [iOS port] Copy the first selected Sound object's PCM (mixed to mono) into
+ * out[0..maxSamples-1] so the Objects tab can hand a sound to the Analyze tab.
+ * Returns #samples (0 if no Sound is selected). */
+int praatios_selectedSoundPCM (float *out, int maxSamples, double *outRate) {
+	praatios_init ();
+	for (integer i = 1; i <= theCurrentPraatObjects -> n; i ++) {
+		praat_Object obj = & theCurrentPraatObjects -> list [i];
+		if (obj -> isSelected && str32equ (obj -> klas -> className, U"Sound")) {
+			Sound snd = (Sound) obj -> object;
+			integer ns = snd -> nx; if (ns > maxSamples) ns = maxSamples;
+			const integer nch = snd -> ny;
+			for (integer k = 1; k <= ns; k ++) {
+				double v = 0.0;
+				for (integer c = 1; c <= nch; c ++) v += snd -> z [c] [k];
+				out [k - 1] = (float) (v / nch);
+			}
+			*outRate = 1.0 / snd -> dx;
+			return (int) ns;
+		}
+	}
+	return 0;
+}
+
 int praatios_waveform (double t0, double t1, int n, float *outMin, float *outMax) {
 	if (! theSound. get() || n <= 0) return 0;
 	const integer nx = theSound -> nx;

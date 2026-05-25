@@ -54,7 +54,9 @@ final class ObjectsModel: ObservableObject {
 }
 
 struct ObjectsView: View {
+    @EnvironmentObject private var store: AppStore
     @StateObject private var m = ObjectsModel()
+    @StateObject private var audio = AudioEngine()
     @State private var showImporter = false
     @State private var scriptField = ""
     @State private var showRename = false
@@ -71,6 +73,8 @@ struct ObjectsView: View {
                   ("To Intensity", "To Intensity: 100, 0, \"yes\""),
                   ("To Spectrum", "To Spectrum: \"yes\""),
                   ("To Harmonicity", "To Harmonicity (cc): 0.01, 75, 0.1, 1"),
+                  ("To mono", "Convert to mono"),
+                  ("To stereo", "Convert to stereo"),
                   ("Play", "Play")],
         "Pitch": [("Get mean", "Get mean: 0, 0, \"Hertz\""),
                   ("Get min", "Get minimum: 0, 0, \"Hertz\", \"parabolic\""),
@@ -101,6 +105,18 @@ struct ObjectsView: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(.gray.opacity(0.4)))
         }
         .padding(8)
+        .overlay(alignment: .top) {
+            if audio.isRecording {
+                HStack(spacing: 8) {
+                    RecordingBanner(seconds: audio.recordSeconds, level: audio.recordLevel)
+                    Button { recordSound() } label: { Label("Stop", systemImage: "stop.fill") }
+                        .buttonStyle(.borderedProminent).tint(.red).controlSize(.small)
+                }
+                .padding(.top, 8).padding(.horizontal, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: audio.isRecording)
         .onAppear { m.refresh() }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [.audio, .text, .data, .item],
@@ -124,6 +140,36 @@ struct ObjectsView: View {
     private func specsForSelection() -> [CmdSpec] {
         guard let cls = m.selectedClasses.first else { return [] }
         return CmdSpec.byClass[cls] ?? []
+    }
+
+    /// Number of currently-selected Sound objects (drives Analyze / Combine enablement).
+    private var selectedSoundCount: Int {
+        m.objects.filter { m.selected.contains($0.id) && $0.className == "Sound" }.count
+    }
+
+    /// Start/stop a recording; on stop, add the captured audio to the object list (like Praat's
+    /// "New ▸ Record mono Sound…").
+    private func recordSound() {
+        audio.toggleRecording { captured, sr in
+            guard !captured.isEmpty else { return }
+            _ = captured.withUnsafeBufferPointer {
+                praatios_addSoundObject($0.baseAddress, Int32(captured.count), sr, "recording")
+            }
+            m.refresh()
+        }
+    }
+
+    /// Send the first selected Sound object to the Analyze tab (shared engine).
+    private func analyzeSelected() {
+        let maxN = 48_000 * 120          // up to ~2 min of mono audio at 48 kHz
+        var buf = [Float](repeating: 0, count: maxN)
+        var rate = 44100.0
+        let ns = buf.withUnsafeMutableBufferPointer {
+            Int(praatios_selectedSoundPCM($0.baseAddress, Int32(maxN), &rate))
+        }
+        guard ns > 0 else { m.output = "Select a Sound object to analyze."; return }
+        let name = m.objects.first { m.selected.contains($0.id) && $0.className == "Sound" }?.name ?? "sound"
+        store.sendToAnalyze(Array(buf[0 ..< ns]), rate: rate, name: name)
     }
 
     /// Draw the selected object to a PNG (via Praat's own Quartz Graphics) and show it.
@@ -155,6 +201,8 @@ struct ObjectsView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Menu {
+                    Button { recordSound() } label: { Label("Record mono Sound…", systemImage: "record.circle") }
+                    Divider()
                     Button("Sound (440 Hz tone)") { m.runRaw(#"Create Sound from formula: "tone", 1, 0, 1, 44100, ~ 0.5*sin(2*pi*440*x)"#) }
                     Button("Sound as tone complex") { m.runRaw(#"Create Sound as tone complex: "tones", 0, 1, 44100, "cosine", 100, 0, 0, 0"#) }
                     Button("TextGrid") { m.runRaw(#"Create TextGrid: 0, 1, "phones words", """#) }
@@ -166,10 +214,17 @@ struct ObjectsView: View {
                     ForEach(CmdSpec.creates) { spec in Button(spec.title) { activeSpec = spec } }
                 } label: { Label("New", systemImage: "plus") }
                 Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
+                Button { analyzeSelected() } label: { Label("Analyze", systemImage: "waveform") }
+                    .disabled(selectedSoundCount == 0)
                 Menu {
                     ForEach(specsForSelection()) { spec in Button(spec.title) { activeSpec = spec } }
                 } label: { Label("Commands", systemImage: "slider.horizontal.3") }
                     .disabled(specsForSelection().isEmpty)
+                Menu {
+                    Button("Combine to stereo") { m.run("Combine to stereo") }
+                    Button("Concatenate") { m.run("Concatenate") }
+                } label: { Label("Combine", systemImage: "square.stack.3d.up") }
+                    .disabled(selectedSoundCount < 2)
                 Button { renameText = ""; showRename = true } label: { Label("Rename", systemImage: "pencil") }
                     .disabled(m.selected.count != 1)
                 Button(role: .destructive) { m.run("Remove") } label: { Label("Remove", systemImage: "trash") }

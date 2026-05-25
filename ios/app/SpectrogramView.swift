@@ -42,7 +42,9 @@ struct SpectrogramView: View {
                 Canvas { ctx, size in draw(ctx, size) }.frame(width: W, height: H)
             }
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
+            // [iOS port] highPriority so cursor/selection wins over an enclosing ScrollView
+            // (the Analyze view scrolls in landscape); scrolling still works on the surrounding panels.
+            .highPriorityGesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
                     guard model.hasSound else { return }
                     if dragMode == .none { dragMode = decideMode(startX: g.startLocation.x, W: W) }

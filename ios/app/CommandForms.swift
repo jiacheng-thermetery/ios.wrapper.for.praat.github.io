@@ -121,6 +121,21 @@ extension CmdSpec {
                 CmdField(label: "To frequency (Hz)", value: "5000", kind: .real),
                 CmdField(label: "Smoothing (Hz)", value: "100", kind: .real),
             ]),
+            CmdSpec(title: "Filter (stop Hann band)…", command: "Filter (stop Hann band)", fields: [
+                CmdField(label: "From frequency (Hz)", value: "0", kind: .real),
+                CmdField(label: "To frequency (Hz)", value: "500", kind: .real),
+                CmdField(label: "Smoothing (Hz)", value: "100", kind: .real),
+            ]),
+            CmdSpec(title: "Resample…", command: "Resample", fields: [
+                CmdField(label: "New sampling frequency (Hz)", value: "22050", kind: .real),
+                CmdField(label: "Precision (samples)", value: "50", kind: .integer),
+            ]),
+            CmdSpec(title: "Scale peak…", command: "Scale peak", fields: [
+                CmdField(label: "New peak", value: "0.99", kind: .real),
+            ]),
+            CmdSpec(title: "Scale intensity…", command: "Scale intensity", fields: [
+                CmdField(label: "New average intensity (dB SPL)", value: "70", kind: .real),
+            ]),
         ],
         "Pitch": [
             CmdSpec(title: "Get value at time…", command: "Get value at time", fields: [

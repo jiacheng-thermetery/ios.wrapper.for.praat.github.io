@@ -1,11 +1,14 @@
 // AudioEngine.swift — microphone recording + playback via AVAudioEngine.
 // Part of the Spraak derivative. GPL-3.0-or-later.
 import AVFoundation
+import SwiftUI
 
 @MainActor
 final class AudioEngine: ObservableObject {
     @Published var isRecording = false
     @Published var permissionDenied = false
+    @Published var recordSeconds: Double = 0     // elapsed recording time
+    @Published var recordLevel: Float = 0        // current input RMS (0…1), for the level meter
 
     private let engine = AVAudioEngine()
     private var captured: [Float] = []
@@ -38,12 +41,21 @@ final class AudioEngine: ObservableObject {
         let format = input.outputFormat(forBus: 0)
         sampleRate = format.sampleRate
         captured.removeAll(keepingCapacity: true)
+        recordSeconds = 0; recordLevel = 0
 
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buf, _ in
             guard let self, let ch = buf.floatChannelData else { return }
             let n = Int(buf.frameLength)
             let slice = UnsafeBufferPointer(start: ch[0], count: n)
-            Task { @MainActor in self.captured.append(contentsOf: slice) }
+            var sum: Float = 0
+            for v in slice { sum += v * v }
+            let rms = n > 0 ? (sum / Float(n)).squareRoot() : 0
+            let sr = format.sampleRate
+            Task { @MainActor in
+                self.captured.append(contentsOf: slice)
+                self.recordSeconds = Double(self.captured.count) / sr
+                self.recordLevel = max(rms, self.recordLevel * 0.85)   // fast attack, slow decay
+            }
         }
         do { try engine.start(); isRecording = true }
         catch { isRecording = false }
@@ -161,4 +173,38 @@ enum DemoSound {
         let x = (f - center) / (bw / 2)
         return 1.0 / (1.0 + x * x)   // Lorentzian resonance
     }
+}
+
+/// A salient "● Recording …" banner: pulsing dot, elapsed time, and a live input-level meter.
+/// Shown wherever a recording is in progress (Analyze and Objects).
+struct RecordingBanner: View {
+    var seconds: Double
+    var level: Float
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle().fill(.white).frame(width: 11, height: 11)
+                .opacity(pulse ? 0.25 : 1)
+                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: pulse)
+            Text("Recording").fontWeight(.semibold)
+            Text(timeString).monospacedDigit().opacity(0.9)
+            GeometryReader { g in
+                Capsule().fill(.white.opacity(0.25))
+                    .overlay(alignment: .leading) {
+                        Capsule().fill(.white)
+                            .frame(width: g.size.width * CGFloat(min(max(Double(level) * 3.5, 0.02), 1)))
+                    }
+            }
+            .frame(height: 6)
+        }
+        .font(.subheadline)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.red))
+        .shadow(radius: 2)
+        .onAppear { pulse = true }
+    }
+
+    private var timeString: String { String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60) }
 }
