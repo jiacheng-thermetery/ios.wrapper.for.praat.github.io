@@ -160,7 +160,11 @@ void structGraphicsScreen :: v9_destroy () noexcept {
 		*/
 		d_gdiGraphicsContext = nullptr;
 	#elif quartz
+		#if defined (PRAAT_IOS)
+		if (! d_isPng && d_macGraphicsContext) {   // [iOS port] no screen view; PDF/file context
+		#else
 		if (! d_macView && ! d_isPng && d_macGraphicsContext) {
+		#endif
 			CGContextEndPage (d_macGraphicsContext);
 			CGContextRelease (d_macGraphicsContext);
 		}
@@ -241,6 +245,7 @@ void structGraphicsScreen :: v_clearWs () {
 			CGContextFillRect (d_macGraphicsContext, CGRectMake (our d_x1DC, our d_y2DC, our d_x2DC - our d_x1DC, our d_y1DC - our d_y2DC));
 			return;
 		}
+		#if ! defined (PRAAT_IOS)   // [iOS port] on-screen drawing-area flush; file output has no view
 		GuiCocoaDrawingArea *cocoaDrawingArea = (GuiCocoaDrawingArea *) our d_drawingArea -> d_widget;
 		if (cocoaDrawingArea && ! [cocoaDrawingArea isHiddenOrHasHiddenAncestor]) {   // can be called at destruction time
 			Melder_assert (!! our d_macGraphicsContext);
@@ -248,6 +253,7 @@ void structGraphicsScreen :: v_clearWs () {
 			CGContextSetRGBFillColor (our d_macGraphicsContext, 1.0, 1.0, 1.0, 1.0);
 			CGContextFillRect (d_macGraphicsContext, CGRectMake (our d_x1DC, our d_y2DC, our d_x2DC - our d_x1DC, our d_y1DC - our d_y2DC));
 		}
+		#endif
 	#endif
 }
 
@@ -297,6 +303,7 @@ void structGraphicsScreen :: v_updateWs () {
 		if (our d_winWindow)
 			InvalidateRect (our d_winWindow, nullptr, true);
 	#elif quartz
+		#if ! defined (PRAAT_IOS)   // [iOS port] no on-screen view to invalidate (file output)
 		NSView *view = our d_macView;
 		Melder_assert (!! view);
 		NSRect rect;
@@ -316,6 +323,7 @@ void structGraphicsScreen :: v_updateWs () {
 		}
 		//[view setNeedsDisplayInRect: rect];
 		[view setNeedsDisplay: YES];
+		#endif
 	#endif
 }
 
@@ -381,13 +389,17 @@ static int GraphicsScreen_init (GraphicsScreen me, void *voidDisplay, void *void
 		_GraphicsScreen_text_init (me);
 	#elif quartz
 		(void) voidDisplay;
+		#if ! defined (PRAAT_IOS)   // [iOS port] on-screen graphics view; iOS uses file/PDF contexts
 		if (my printer) {
 			my d_macView = (NSView *) voidWindow;   // in case we do view-based printing
-			//my d_macGraphicsContext = (CGContextRef) voidWindow;   // in case we do context-based printing
 		} else {
 			my d_macView = (NSView *) voidWindow;
 			my d_macGraphicsContext = nullptr;   // will be retrieved and nullified at expose time
 		}
+		#else
+		(void) voidWindow;
+		my d_macGraphicsContext = nullptr;
+		#endif
 		my d_depth = ( my resolution > 150 ? 1 : 8 );   // BUG: replace by true depth (1=black/white)
 		_GraphicsScreen_text_init (me);
 	#endif
@@ -491,9 +503,11 @@ autoGraphics Graphics_create_xmdrawingarea (GuiDrawingArea w) {
 		XtVaGetValues (my d_drawingArea -> d_widget, XmNwidth, & width, XmNheight, & height, nullptr);
 		Graphics_setWsViewport (me.get(), 0.0, width, 0.0, height);
 	#elif quartz
+		#if ! defined (PRAAT_IOS)   // [iOS port] on-screen drawing area; not used for file output
 		NSView *view = (NSView *) my d_drawingArea -> d_widget;
 		NSRect bounds = [view bounds];
 		Graphics_setWsViewport (me.get(), 0.0, bounds.size.width, 0.0, bounds.size.height);
+		#endif
 	#endif
 	return me.move();
 }

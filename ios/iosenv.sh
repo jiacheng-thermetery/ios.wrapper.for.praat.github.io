@@ -21,7 +21,7 @@ TARGETFLAGS="-target ${PRAAT_IOS_TARGET} -isysroot ${SYSROOT}"
 #                  AudioToolbox alert sounds) and take the portable/CPU fallback.
 #                  Every guarded site is listed in ios/PORTING_NOTES.md.
 #   NO_GRAPHICS -> no window system / drawing backend (entails NO_GUI => cocoa==0).
-PRAATDEFS="-Dmacintosh -DPRAAT_IOS -DNO_GRAPHICS"
+PRAATDEFS="-Dmacintosh -DPRAAT_IOS -DNO_GRAPHICS -DPRAAT_IOS_GRAPHICS"
 
 SHARED="${TARGETFLAGS} ${PRAATDEFS} -O2 -g1 -fno-common -Wno-deprecated-declarations"
 

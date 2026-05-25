@@ -45,7 +45,12 @@ void Graphics_init (Graphics me, int resolution);
 /*
 	Honour the NO_GRAPHICS compiler switch.
 */
-#if defined (NO_GRAPHICS)
+#if defined (PRAAT_IOS_GRAPHICS)   /* [iOS port] Quartz (CoreGraphics/CoreText) for headless PDF/PNG/file rendering, no AppKit GUI */
+	#define cairo 0
+	#define gdi 0
+	#define direct2d 0
+	#define quartz 1
+#elif defined (NO_GRAPHICS)
 	#define cairo 0
 	#define gdi 0
 	#define direct2d 0
@@ -75,10 +80,18 @@ void Graphics_init (Graphics me, int resolution);
 	#define quartz 0
 #endif
 
+#if quartz && defined (PRAAT_IOS)   /* [iOS port] frameworks normally reached via <Cocoa/Cocoa.h> on macOS */
+	#include <CoreGraphics/CoreGraphics.h>
+	#include <CoreText/CoreText.h>
+	#include <CoreFoundation/CoreFoundation.h>
+	#include <ImageIO/ImageIO.h>
+	#include <MobileCoreServices/MobileCoreServices.h>   /* kUTTypePNG for PNG export */
+#endif
+
 Thing_define (GraphicsScreen, Graphics) {
 	bool d_isPng;
 	structMelderFile d_file;
-	#if defined (NO_GRAPHICS)
+	#if defined (NO_GRAPHICS) && ! quartz
 	#elif cairo
 		#if gtk
 			GdkDisplay *d_display;
@@ -97,7 +110,9 @@ Thing_define (GraphicsScreen, Graphics) {
 		HBITMAP d_gdiBitmap;
 		Gdiplus::Bitmap *d_gdiplusBitmap;
 	#elif quartz
-		NSView *d_macView;
+		#if ! defined (PRAAT_IOS)
+			NSView *d_macView;   // [iOS port] AppKit screen view: screen path only
+		#endif
 		int d_macFont, d_macStyle;
 		int d_depth;
 		uint8 *d_bits;

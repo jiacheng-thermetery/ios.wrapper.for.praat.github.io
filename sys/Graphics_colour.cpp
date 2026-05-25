@@ -118,7 +118,7 @@ static void highlight (Graphics graphics, integer x1DC, integer x2DC, integer y1
 			SetROP2 (my d_gdiGraphicsContext, R2_COPYPEN);
 			SelectPen (my d_gdiGraphicsContext, GetStockPen (BLACK_PEN));
 			SelectBrush (my d_gdiGraphicsContext, GetStockBrush (NULL_BRUSH));   // superfluous?
-		#elif quartz
+		#elif quartz && ! defined (PRAAT_IOS)   // [iOS port] on-screen selection highlight only
 			const int width = x2DC - x1DC, height = y1DC - y2DC;
 			if (width <= 0 || height <= 0)
 				return;
@@ -181,7 +181,7 @@ static void highlight2 (Graphics graphics, integer x1DC, integer x2DC, integer y
 			SetROP2 (my d_gdiGraphicsContext, R2_COPYPEN);
 			SelectPen (my d_gdiGraphicsContext, GetStockPen (BLACK_PEN));
 			SelectBrush (my d_gdiGraphicsContext, GetStockBrush (NULL_BRUSH));   // superfluous?
-		#elif quartz
+		#elif quartz && ! defined (PRAAT_IOS)   // [iOS port] on-screen selection highlight only
 			GuiCocoaDrawingArea *drawingArea = (GuiCocoaDrawingArea *) my d_drawingArea -> d_widget;
 			if (! drawingArea)
 				return;

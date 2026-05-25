@@ -61,6 +61,7 @@ struct ObjectsView: View {
     @State private var renameText = ""
     @State private var exportItem: ExportItem?
     @State private var activeSpec: CmdSpec?
+    @State private var drawnPicture: ExportItem?
 
     // a small curated command palette per class (everything else: type a command below)
     private let palette: [String: [(String, String)]] = [
@@ -112,6 +113,7 @@ struct ObjectsView: View {
             Button("Rename") { if !renameText.isEmpty { m.run("Rename: \"\(renameText)\"") } }
         }
         .sheet(item: $exportItem) { ActivityView(items: [$0.url]) }
+        .sheet(item: $drawnPicture) { PictureSheet(url: $0.url) }
         .sheet(item: $activeSpec) { spec in
             CommandFormView(spec: spec) { line in
                 if spec.isCreate { m.runRaw(line) } else { m.run(line) }
@@ -122,6 +124,18 @@ struct ObjectsView: View {
     private func specsForSelection() -> [CmdSpec] {
         guard let cls = m.selectedClasses.first else { return [] }
         return CmdSpec.byClass[cls] ?? []
+    }
+
+    /// Draw the selected object to a PNG (via Praat's own Quartz Graphics) and show it.
+    private func drawPicture() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("praat-picture.png")
+        try? FileManager.default.removeItem(at: url)
+        let result = String(cString: praatios_drawSelectedToPNG(url.path, 6.5, 4.0, 200))
+        if result == "ok", FileManager.default.fileExists(atPath: url.path) {
+            drawnPicture = ExportItem(url: url)
+        } else {
+            m.output = result
+        }
     }
 
     /// Write the selected object to a temp file (WAV for Sound, Praat text otherwise) and share it.
@@ -159,6 +173,8 @@ struct ObjectsView: View {
                 Button { renameText = ""; showRename = true } label: { Label("Rename", systemImage: "pencil") }
                     .disabled(m.selected.count != 1)
                 Button(role: .destructive) { m.run("Remove") } label: { Label("Remove", systemImage: "trash") }
+                    .disabled(m.selected.isEmpty)
+                Button { drawPicture() } label: { Label("Draw", systemImage: "photo") }
                     .disabled(m.selected.isEmpty)
                 Button { saveSelected() } label: { Label("Save", systemImage: "square.and.arrow.up") }
                     .disabled(m.selected.count != 1)
@@ -227,6 +243,31 @@ struct ObjectsView: View {
 }
 
 struct ExportItem: Identifiable { let id = UUID(); let url: URL }
+
+/// Shows a rendered Praat picture (PNG) with a share button.
+struct PictureSheet: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationView {
+            ScrollView([.horizontal, .vertical]) {
+                if let img = UIImage(contentsOfFile: url.path) {
+                    Image(uiImage: img).resizable().aspectRatio(contentMode: .fit)
+                        .frame(minWidth: 300)
+                } else {
+                    Text("Could not render picture.").foregroundStyle(.secondary).padding()
+                }
+            }
+            .background(Color.white)
+            .navigationTitle("Picture")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { ShareLink(item: url) }
+            }
+        }
+    }
+}
 
 struct ActivityView: UIViewControllerRepresentable {
     let items: [Any]

@@ -22,6 +22,8 @@
 #include "Vector.h"
 #include "Sound_and_Spectrum.h"
 #include "Spectrum.h"
+#include "Spectrogram.h"
+#include "Graphics.h"
 
 #include <string>
 #include <vector>
@@ -99,6 +101,45 @@ const char *praatios_objectInfo (int index) {
 	g_result += (const char *) Melder_peek32to8 (obj -> name. get() ? obj -> name. get() : U"");
 	g_result += obj -> isSelected ? "|1" : "|0";
 	return g_result.c_str ();
+}
+
+const char *praatios_drawSelectedToPNG (const char *path, double wInches, double hInches, int resolution) {
+	praatios_init ();
+	praat_Object found = nullptr;
+	for (integer i = 1; i <= theCurrentPraatObjects -> n; i ++)
+		if (theCurrentPraatObjects -> list [i]. isSelected) { found = & theCurrentPraatObjects -> list [i]; break; }
+	if (! found) return "Select an object first.";
+	g_result.clear ();
+	try {
+		autostring32 path32 = Melder_8to32_e (path);
+		structMelderFile file { };
+		Melder_pathToFile (path32.get(), & file);
+		autoGraphics graphics = Graphics_create_pngfile (& file, resolution, 0.0, wInches, 0.0, hInches);
+		Graphics_setFontSize (graphics.get(), 10.0);
+		Graphics_setViewport (graphics.get(), 0.8, wInches - 0.3, 0.4, hInches - 0.4);
+		Graphics_setWindow (graphics.get(), 0.0, 1.0, 0.0, 1.0);
+		conststring32 cls = found -> klas -> className;
+		Daata obj = found -> object;
+		if (str32equ (cls, U"Sound"))
+			Sound_draw ((Sound) obj, graphics.get(), 0, 0, 0, 0, true, U"Curve");
+		else if (str32equ (cls, U"Spectrogram"))
+			Spectrogram_paint ((Spectrogram) obj, graphics.get(), 0, 0, 0, 0, 100.0, true, 50.0, 6.0, 0.0, true);
+		else if (str32equ (cls, U"Pitch"))
+			Pitch_draw ((Pitch) obj, graphics.get(), 0, 0, 0, 500.0, true, false, kPitch_unit::HERTZ);
+		else if (str32equ (cls, U"Formant"))
+			Formant_drawSpeckles ((Formant) obj, graphics.get(), 0, 0, 5500.0, 30.0, true);
+		else if (str32equ (cls, U"Intensity"))
+			Intensity_draw ((Intensity) obj, graphics.get(), 0, 0, 0, 0, true);
+		else if (str32equ (cls, U"Spectrum"))
+			Spectrum_draw ((Spectrum) obj, graphics.get(), 0, 0, 0, 0, true);
+		else {
+			g_result = "Drawing is not yet supported for ";
+			g_result += (const char *) Melder_peek32to8 (cls);
+			return g_result.c_str ();
+		}
+		graphics.reset ();   // closes the Graphics, writing the PNG
+		return "ok";
+	} catch (MelderError) { Melder_clearError (); return "Draw failed."; }
 }
 
 int praatios_setSound (const float *samples, int count, double sampleRate) {

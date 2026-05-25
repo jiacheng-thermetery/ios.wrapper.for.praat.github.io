@@ -1025,17 +1025,14 @@ static void charSizes (Graphics me, _Graphics_widechar string [], bool measureEa
 					const conststring16 codes16 = Melder_peek32to16 (charCodes);
 					const integer length = Melder16_length (codes16);
 
-					NSString *s = [[NSString alloc]
-						initWithBytes: codes16
-						length: (NSUInteger) (length * 2)
-						encoding: NSUTF16LittleEndianStringEncoding   // BUG: should be NSUTF16NativeStringEncoding, except that that doesn't exist
-					];
-
-					CFRange textRange = CFRangeMake (0, (CFIndex) [s length]);
+					CFStringRef s = CFStringCreateWithBytes (nullptr, (const UInt8 *) codes16,
+							length * 2, kCFStringEncodingUTF16LE, false);   // [iOS port] CFString (toll-free bridged), was NSString
+					const CFIndex slength = CFStringGetLength (s);
+					CFRange textRange = CFRangeMake (0, slength);
 
 					CFMutableAttributedStringRef cfstring =
-						CFAttributedStringCreateMutable (kCFAllocatorDefault, (CFIndex) [s length]);
-					CFAttributedStringReplaceString (cfstring, CFRangeMake (0, 0), (CFStringRef) s);
+						CFAttributedStringCreateMutable (kCFAllocatorDefault, slength);
+					CFAttributedStringReplaceString (cfstring, CFRangeMake (0, 0), s);
 					CFAttributedStringSetAttribute (cfstring, textRange, kCTFontAttributeName, theScreenFonts [lc -> font.integer_] [lc -> size] [lc -> style]);
 
 					/*
@@ -1044,8 +1041,8 @@ static void charSizes (Graphics me, _Graphics_widechar string [], bool measureEa
 
 					// Create a path to render text in
 					CGMutablePathRef path = CGPathCreateMutable ();
-					NSRect measureRect = NSMakeRect (0, 0, CGFLOAT_MAX, CGFLOAT_MAX);
-					CGPathAddRect (path, nullptr, (CGRect) measureRect);
+					CGRect measureRect = CGRectMake (0, 0, CGFLOAT_MAX, CGFLOAT_MAX);   // [iOS port] CGRect, was NSRect
+					CGPathAddRect (path, nullptr, measureRect);
 				
 					CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString ((CFAttributedStringRef) cfstring);
 					CFRange fitRange;
@@ -1053,7 +1050,7 @@ static void charSizes (Graphics me, _Graphics_widechar string [], bool measureEa
 					CGSize frameSize = CTFramesetterSuggestFrameSizeWithConstraints (framesetter, textRange, nullptr, targetSize, & fitRange);
 					CFRelease (framesetter);
 					CFRelease (cfstring);
-					[s release];
+					CFRelease (s);   // [iOS port] was [s release]
 					CFRelease (path);
 					//Longchar_Info info = lc -> karInfo;
 					//bool isDiacritic = ( info -> ps.times == 0 );
@@ -2201,6 +2198,12 @@ double Graphics_textWidth_ps (Graphics me, conststring32 txt, bool useSilipaPS) 
 		static bool inited = false;
 		if (inited)
 			return true;
+	#if defined (PRAAT_IOS)
+		// [iOS port] AppKit's NSFontManager is unavailable; iOS ships the standard families.
+		hasTimes = hasHelvetica = hasCourier = hasPalatino = true;
+		hasDoulos = hasCharis = hasCharis7 = false;   // SIL IPA fonts not bundled
+		hasIpaSerif = false;
+	#else
 		NSArray *fontNames = [[NSFontManager sharedFontManager] availableFontFamilies];
 		hasTimes = [fontNames containsObject: @"Times"];
 		if (! hasTimes)
@@ -2221,6 +2224,7 @@ double Graphics_textWidth_ps (Graphics me, conststring32 txt, bool useSilipaPS) 
 		else
 			hasCharis = [fontNames containsObject: @"Charis SIL"];   // try Charis 6
 		hasIpaSerif = hasDoulos || hasCharis;
+	#endif
 		inited = true;
 		return true;
 	}

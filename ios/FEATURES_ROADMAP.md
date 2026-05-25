@@ -176,16 +176,14 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
 1. **Objects window + command runner (T1)** — the keystone; turns the app into Praat. *(starting now)*
 2. **Open-any-file + Save/export (T1)** — `Data_readFromFile` for any type; `.fileExporter` for Sound/TextGrid/Table/Data.
 3. **Generic form renderer (T4)** — makes "…" commands and the whole **New** menu usable.
-4. **CoreGraphics Graphics backend + Picture tab (T2)** — *partially done:* the Analyze view exports a
-   PNG of the spectrogram + overlays (share sheet, via `ImageRenderer`). **Still open:** rendering
-   *arbitrary* Praat `Draw…`/`Paint…` commands. Finding from a probe: Praat's Quartz backend is
-   iOS-compatible at the drawing level (CGContext/CoreText), and `Graphics_create_pdffile` is pure
-   CoreGraphics, **but** it requires building the **"nogui" edition** (graphics-on, GUI-off) rather than
-   the current **barren** (`NO_GRAPHICS`) edition — the Graphics structs gate fields on
-   `#if defined(NO_GRAPHICS)` while the drawing code gates on the `quartz` macro, so the two disagree
-   unless we switch the Graphics subsystem to `NO_GUI` and gate the ~6 Graphics files' AppKit/screen and
-   CoreText-font touchpoints (`d_macView`, `GuiCocoaDrawingArea`, `NSGraphicsContext`, `NSFontManager`).
-   That's a self-contained but non-trivial subsystem port — the right next big effort.
+4. **CoreGraphics Graphics backend + Picture tab (T2)** — **done.** The Praat **Quartz** Graphics backend
+   (CGContext/CoreText/ImageIO) is now compiled for iOS via a `PRAAT_IOS_GRAPHICS` switch in `GraphicsP.h`
+   (quartz=1 even under `NO_GRAPHICS`), with the ~23 AppKit/screen touchpoints (`d_macView`,
+   `GuiCocoaDrawingArea`, `NSGraphicsContext`, `NSFontManager`, `NSString`→`CFString`) gated/ported across
+   `GraphicsScreen.cpp`, `Graphics_colour.cpp`, `Graphics_text.cpp`. The Objects window's **Draw** button
+   renders the selected object (Sound/Spectrogram/Pitch/Formant/Intensity/Spectrum) to a **PNG** via
+   `Graphics_create_pngfile` and shows it (zoomable, shareable). The Analyze view also exports its
+   spectrogram via `ImageRenderer`. This unlocks Praat's real vector drawing on iOS.
 5. **eSpeak "Speak" feature (T1)** — quick, high-delight.
 6. **Shared tier editor + full TextGrid editor (T3)** — *TextGrid editor done* (multi interval/point
    tiers, boundaries at cursor, labels, `.TextGrid` export). *Still open:* the shared **curve** tier

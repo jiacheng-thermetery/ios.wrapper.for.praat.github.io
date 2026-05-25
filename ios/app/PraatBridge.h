@@ -16,6 +16,10 @@ const char *praatios_run (const char *utf8script);   /* runs a script, returns I
 int         praatios_objectCount (void);
 const char *praatios_objectInfo (int index1based);   /* "id|className|name|selected"; valid until next call */
 
+/* Draw the first selected object (Sound/Spectrogram/Pitch/Formant/Intensity/Spectrum) to a PNG
+ * file using Praat's own Quartz Graphics. Returns "ok" or an error message. */
+const char *praatios_drawSelectedToPNG (const char *path, double widthInches, double heightInches, int resolution);
+
 /* --- analysis: set the current Sound from mono float PCM --- */
 int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */

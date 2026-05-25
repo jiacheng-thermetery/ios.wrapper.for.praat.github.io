@@ -21,7 +21,7 @@ LIBS="fon/libfon.a artsynth/libartsynth.a FFNet/libFFNet.a gram/libgram.a EEG/li
 
 echo "[1/4] compiling C++ bridge"
 xcrun --sdk $SDK clang++ -target $TGT -isysroot "$SDKPATH" -std=gnu++17 \
-  -Dmacintosh -DPRAAT_IOS -DNO_GRAPHICS -O2 -Wno-deprecated-declarations \
+  -Dmacintosh -DPRAAT_IOS -DNO_GRAPHICS -DPRAAT_IOS_GRAPHICS -O2 -Wno-deprecated-declarations \
   -Isys -Imelder -Ikar -Ifon -Idwsys -Istat -ILPC -Igram -Idwtools -Iexternal/gsl \
   -c ios/app/PraatBridge.mm -o ios/app/PraatBridge.o
 
@@ -36,6 +36,7 @@ xcrun --sdk $SDK swiftc -sdk "$SDKPATH" -target $TGT -O \
   -o "$APPDIR/Spraak" \
   ios/app/PraatBridge.o ios/pa_ios_hostapis.o $LIBS \
   -framework CoreFoundation -framework Accelerate -framework Metal -framework Foundation \
+  -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices \
   -lc++ -lm
 
 echo "[3/4] assembling bundle"
