@@ -91,6 +91,13 @@ device is to **sign it yourself**, which is free and fully supported.
   **one year** on your registered devices. If you already have it, use it: it's the least hassle
   (no weekly re-signing). You do **not** need a paid account just to run it on your own phone.
 
+> ⚠️ **The $99/year is Apple's fee, paid in full to Apple — not a subscription from us.** Neither
+> this project's contributors nor the original Praat authors provide it, receive any part of it, or
+> have any financial relationship with you. This software is **free** in both senses (freedom *and*
+> price): we charge nothing and never will. The only thing money buys here is Apple's optional
+> convenience — a developer account whose signing certificate lasts a year instead of the free
+> account's 7 days. The **free Apple ID path costs $0** and is enough to run the app.
+
 **Steps.** Build the engine libs for device arm64 (`PRAAT_IOS_SDK=iphoneos
 PRAAT_IOS_TARGET=arm64-apple-ios15.0 source ios/iosenv.sh`, then `make` each lib as above). The
 repo's `build-app.sh` targets the **Simulator**; for a device the simplest signer is **Xcode** —
