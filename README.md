@@ -18,9 +18,13 @@ Graphics drawing path). For details, build instructions, and the change record s
 ## Installation
 
 > **New to building iOS apps?** This setup — Xcode, the cross-compile toolchain, and (for a real
-> device) code-signing — is genuinely fiddly and **not trivial for beginners.** If the steps below
+> device) code-signing — has a moderately difficult learning curve for your first time and is **not trivial for beginners.** If the steps below
 > are over your head, paste this README into your LLM of choice (Claude, ChatGPT, …) and ask it to
-> set up the environment with you, step by step, for your machine.
+> set up the environment with you, step by step, for your machine. For example, try the prompt below:
+
+```
+I'd like to install `github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io` onto my iPhone. It is basically an iOS wrapper for the phonetic analysis software Praat. I am new to compiling, sideloading, signging apps, and this whole installation process. Would you please walk me through step by step for this installation? 
+```
 
 Requires [Xcode](https://developer.apple.com/xcode/) with the iOS SDK. All commands run from the
 repository root.
