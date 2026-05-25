@@ -47,6 +47,7 @@ struct AnalyzeView: View {
     @State private var showPitch = true
     @State private var showFormants = true
     @State private var showIntensity = true
+    @State private var pictureExport: ExportItem?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -94,6 +95,7 @@ struct AnalyzeView: View {
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio]) { result in
             if case .success(let url) = result { openFile(url) }
         }
+        .sheet(item: $pictureExport) { ActivityView(items: [$0.url]) }
         .onAppear {
             if !model.hasSound {
                 loadDemo()
@@ -117,6 +119,8 @@ struct AnalyzeView: View {
                 timeMenu
                 audioMenu
                 Button { settings = model.settings; showSettings = true } label: { Image(systemName: "gearshape") }
+                Button { exportPicture() } label: { Image(systemName: "square.and.arrow.up") }
+                    .disabled(!model.hasSound)
                 if audio.permissionDenied { Text("Mic denied").font(.caption2).foregroundStyle(.red) }
             }
             .padding(.trailing, 28)
@@ -254,6 +258,19 @@ struct AnalyzeView: View {
     }
     private func playOrStop() { if audio.isPlaying { audio.stopPlayback() } else { audio.play(samples, rate: rate, from: model.viewStart, to: model.viewEnd) } }
     private func playSelection() { if let s = selection { audio.play(samples, rate: rate, from: s.lo, to: s.hi) } }
+
+    /// Render the spectrogram + overlays to a PNG and present the share sheet ("export the picture").
+    @MainActor private func exportPicture() {
+        let picture = SpectrogramView(model: model, cursorTime: .constant(nil), selection: .constant(nil),
+                                      showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
+            .frame(width: 1100, height: 620).background(.white)
+        let renderer = ImageRenderer(content: picture)
+        renderer.scale = 2
+        guard let img = renderer.uiImage, let data = img.pngData() else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("praat-spectrogram.png")
+        try? data.write(to: url)
+        pictureExport = ExportItem(url: url)
+    }
 
     private func fmt(_ x: Double) -> String { String(format: "%.3f", x) }
 

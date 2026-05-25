@@ -176,7 +176,16 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
 1. **Objects window + command runner (T1)** — the keystone; turns the app into Praat. *(starting now)*
 2. **Open-any-file + Save/export (T1)** — `Data_readFromFile` for any type; `.fileExporter` for Sound/TextGrid/Table/Data.
 3. **Generic form renderer (T4)** — makes "…" commands and the whole **New** menu usable.
-4. **CoreGraphics Graphics backend + Picture tab (T2)** — unlocks all `Draw…`/`Paint…` and the Demo window.
+4. **CoreGraphics Graphics backend + Picture tab (T2)** — *partially done:* the Analyze view exports a
+   PNG of the spectrogram + overlays (share sheet, via `ImageRenderer`). **Still open:** rendering
+   *arbitrary* Praat `Draw…`/`Paint…` commands. Finding from a probe: Praat's Quartz backend is
+   iOS-compatible at the drawing level (CGContext/CoreText), and `Graphics_create_pdffile` is pure
+   CoreGraphics, **but** it requires building the **"nogui" edition** (graphics-on, GUI-off) rather than
+   the current **barren** (`NO_GRAPHICS`) edition — the Graphics structs gate fields on
+   `#if defined(NO_GRAPHICS)` while the drawing code gates on the `quartz` macro, so the two disagree
+   unless we switch the Graphics subsystem to `NO_GUI` and gate the ~6 Graphics files' AppKit/screen and
+   CoreText-font touchpoints (`d_macView`, `GuiCocoaDrawingArea`, `NSGraphicsContext`, `NSFontManager`).
+   That's a self-contained but non-trivial subsystem port — the right next big effort.
 5. **eSpeak "Speak" feature (T1)** — quick, high-delight.
 6. **Shared tier editor + full TextGrid editor (T3)** — the most-used interactive editing.
 7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — flagship native editors.
