@@ -15,14 +15,15 @@ int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */
 double praatios_soundSampleRate (void);
 
-/* Copy the waveform (downsampled to `n` points, peak-preserving) into out[0..n-1]. */
-int    praatios_waveform (int n, float *outMin, float *outMax);
+/* Waveform of [t0,t1], downsampled to `n` peak-preserving (min,max) pairs. */
+int    praatios_waveform (double t0, double t1, int n, float *outMin, float *outMax);
 
-/* --- spectrogram (dB power matrix) ---
- * Returns a pointer to nx*ny floats in dB (row-major: index = iy*nx + ix; iy=0 is the
- * lowest frequency). The buffer is owned by the bridge and valid until the next call.
- * NULL if no sound. */
-const float *praatios_spectrogram (double maxFreq, double windowLength,
+/* --- spectrogram (dB power matrix) over the visible window [t0,t1] ---
+ * Re-analyses the part of the sound in [t0,t1] (like Praat's editor: zooming in shows
+ * finer detail). Returns a pointer to nx*ny floats in dB (row-major: index = iy*nx + ix;
+ * iy=0 is the lowest frequency). The buffer is owned by the bridge and valid until the
+ * next call. NULL if no sound or the window is too small. */
+const float *praatios_spectrogram (double t0, double t1, double maxFreq, double windowLength,
         int *outNx, int *outNy,
         double *outTmin, double *outTmax, double *outFmax,
         double *outDbMin, double *outDbMax);

@@ -15,6 +15,11 @@ final class PraatModel: ObservableObject {
     @Published var duration: Double = 0
     @Published var sampleRate: Double = 0
 
+    // visible time window (zoom/scroll state); everything renders against this
+    @Published var viewStart: Double = 0
+    @Published var viewEnd: Double = 0
+    var viewSpan: Double { max(viewEnd - viewStart, 1e-6) }
+
     @Published var spectrogram: CGImage?
     @Published var fmax: Double = 5000
     @Published var dbMin: Double = 0
@@ -42,24 +47,37 @@ final class PraatModel: ObservableObject {
         duration = praatios_soundDuration()
         sampleRate = praatios_soundSampleRate()
         hasSound = true
+        viewStart = 0; viewEnd = duration
+        recompute()
+    }
+
+    /// Set the visible window (clamped) and re-analyse it.
+    func setView(_ a: Double, _ b: Double) {
+        guard hasSound, duration > 0 else { return }
+        let minSpan = 3.0 * windowLength
+        var lo = max(0, min(a, duration))
+        var hi = min(duration, max(b, lo + minSpan))
+        if hi - lo < minSpan { lo = max(0, hi - minSpan) }
+        if lo == viewStart && hi == viewEnd { return }
+        viewStart = lo; viewEnd = hi
         recompute()
     }
 
     func recompute() {
-        guard hasSound else { return }
+        guard hasSound, viewEnd > viewStart else { return }
 
         var wmin = [Float](repeating: 0, count: waveSamples)
         var wmax = [Float](repeating: 0, count: waveSamples)
         wmin.withUnsafeMutableBufferPointer { lo in
             wmax.withUnsafeMutableBufferPointer { hi in
-                _ = praatios_waveform(Int32(waveSamples), lo.baseAddress, hi.baseAddress)
+                _ = praatios_waveform(viewStart, viewEnd, Int32(waveSamples), lo.baseAddress, hi.baseAddress)
             }
         }
         waveMin = wmin; waveMax = wmax
 
         var nx: Int32 = 0, ny: Int32 = 0
         var t0 = 0.0, t1 = 0.0, fm = 0.0, dmin = 0.0, dmax = 0.0
-        if let ptr = praatios_spectrogram(maxFreqSetting, windowLength,
+        if let ptr = praatios_spectrogram(viewStart, viewEnd, maxFreqSetting, windowLength,
                 &nx, &ny, &t0, &t1, &fm, &dmin, &dmax), nx > 0, ny > 0 {
             fmax = fm; dbMin = dmin; dbMax = dmax
             spectrogram = Self.makeGrayImage(ptr, Int(nx), Int(ny), dmin, dmax)
@@ -75,7 +93,7 @@ final class PraatModel: ObservableObject {
         praatios_curveRange(kind, &lo, &hi)
         var out = [Float](repeating: .nan, count: curveSamples)
         out.withUnsafeMutableBufferPointer {
-            _ = praatios_curve(kind, 0.0, max(duration, 1e-6), Int32(curveSamples), $0.baseAddress)
+            _ = praatios_curve(kind, viewStart, viewEnd, Int32(curveSamples), $0.baseAddress)
         }
         return AnalysisCurve(values: out, lo: lo, hi: hi)
     }

@@ -57,29 +57,41 @@ final class AudioEngine: ObservableObject {
         onStop(captured, sampleRate)
     }
 
-    /// Play a mono Float buffer at the given sample rate.
-    func play(_ samples: [Float], rate: Double) {
-        guard !samples.isEmpty,
+    @Published var isPlaying = false
+    private var playEngine: AVAudioEngine?
+    private var playerNode: AVAudioPlayerNode?
+
+    /// Play the mono Float buffer over the time range [from, to] (seconds). Replaces any
+    /// current playback. `to == .infinity` plays to the end.
+    func play(_ samples: [Float], rate: Double, from: Double = 0, to: Double = .infinity) {
+        stopPlayback()
+        let n = samples.count
+        let i0 = max(0, Int(from * rate))
+        let i1 = min(n, to.isFinite ? Int(to * rate) : n)
+        guard i1 > i0,
               let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate,
-                                         channels: 1, interleaved: false) else { return }
-        let player = AVAudioPlayerNode()
-        let playEngine = AVAudioEngine()
-        playEngine.attach(player)
-        playEngine.connect(player, to: playEngine.mainMixerNode, format: format)
-        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return }
-        buf.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { memcpy(buf.floatChannelData![0], $0.baseAddress, samples.count * MemoryLayout<Float>.size) }
+                                         channels: 1, interleaved: false),
+              let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(i1 - i0))
+        else { return }
+        buf.frameLength = AVAudioFrameCount(i1 - i0)
+        samples.withUnsafeBufferPointer {
+            memcpy(buf.floatChannelData![0], $0.baseAddress!.advanced(by: i0), (i1 - i0) * MemoryLayout<Float>.size)
+        }
+        let eng = AVAudioEngine(); let player = AVAudioPlayerNode()
+        eng.attach(player); eng.connect(player, to: eng.mainMixerNode, format: format)
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         try? AVAudioSession.sharedInstance().setActive(true)
-        do {
-            try playEngine.start()
-            player.scheduleBuffer(buf, completionHandler: nil)
-            player.play()
-            // keep the engine alive for the duration
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(samples.count) / rate + 0.3) {
-                playEngine.stop()
-            }
-        } catch { }
+        do { try eng.start() } catch { return }
+        playEngine = eng; playerNode = player; isPlaying = true
+        player.scheduleBuffer(buf) { [weak self] in
+            Task { @MainActor in self?.stopPlayback() }
+        }
+        player.play()
+    }
+
+    func stopPlayback() {
+        playerNode?.stop(); playEngine?.stop()
+        playerNode = nil; playEngine = nil; isPlaying = false
     }
 }
 

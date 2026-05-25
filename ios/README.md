@@ -16,9 +16,13 @@ the full Praat scripting language, etc. — to iOS (arm64), with a small SwiftUI
   - **Analyze** — record from the microphone (AVAudioEngine), or load a demo sound, then see a live
     **spectrogram** with **pitch** (cyan), **formant** (red), and **intensity** (yellow) overlays —
     computed by Praat's real DSP (`Sound_to_Spectrogram_e`, `Sound_to_Pitch`, `Sound_to_Formant_burg`,
-    `Sound_to_Intensity`). Drag to place a time cursor and read the **spectral slice** at that point
-    (Praat's Cmd+L). A **TextGrid-style annotation tier** lets you place interval boundaries and type
-    labels. Play back the sound.
+    `Sound_to_Intensity`). Tap to place a time cursor and read the **spectral slice** at that point
+    (Praat's Cmd+L); **drag to select** a time range. A **TextGrid-style annotation tier** lets you
+    place interval boundaries and type labels.
+    A **Time** menu mirrors Praat's Time-domain commands — Show all (⌘A), Zoom in/out (⌘I/⌘O),
+    Zoom to selection (⌘N), Zoom back (⌘B), Scroll page back/forward (↑/↓) — and zooming **re-analyses
+    the visible window** so detail increases as you zoom in. An **Audio** menu plays the window or the
+    selection and stops/interrupts playback.
   - **Script** — type a Praat script, tap Run, see the Info-window output.
 - A headless CLI (`ios/praat_barren_ios`) runs `--run script.praat` under `simctl spawn`.
 

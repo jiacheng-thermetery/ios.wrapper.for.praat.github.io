@@ -9,9 +9,16 @@ struct Annotation: Identifiable {
     var label: String = ""
 }
 
+struct TimeRange: Equatable {
+    var a: Double, b: Double
+    var lo: Double { min(a, b) }
+    var hi: Double { max(a, b) }
+}
+
 struct SpectrogramView: View {
     @ObservedObject var model: PraatModel
     @Binding var cursorTime: Double?
+    @Binding var selection: TimeRange?
     var showPitch: Bool
     var showFormants: Bool
     var showIntensity: Bool
@@ -32,16 +39,39 @@ struct SpectrogramView: View {
                 Canvas { ctx, size in draw(ctx, size) }.frame(width: W, height: H)
             }
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
-                guard model.duration > 0 else { return }
-                cursorTime = min(max(0, Double(g.location.x / W) * model.duration), model.duration)
-            })
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { g in
+                    guard model.hasSound else { return }
+                    if abs(g.translation.width) > 6 {
+                        selection = TimeRange(a: timeAt(g.startLocation.x, W), b: timeAt(g.location.x, W))
+                    }
+                }
+                .onEnded { g in
+                    guard model.hasSound else { return }
+                    if abs(g.translation.width) <= 6 {
+                        cursorTime = timeAt(g.location.x, W); selection = nil
+                    } else {
+                        selection = TimeRange(a: timeAt(g.startLocation.x, W), b: timeAt(g.location.x, W))
+                        cursorTime = nil
+                    }
+                })
         }
     }
 
+    private func timeAt(_ x: Double, _ W: Double) -> Double {
+        min(max(model.viewStart + (x / W) * model.viewSpan, model.viewStart), model.viewEnd)
+    }
+    private func xFor(time t: Double, _ W: Double) -> Double { W * (t - model.viewStart) / model.viewSpan }
+
     private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
-        guard model.hasSound, model.duration > 0 else { return }
+        guard model.hasSound, model.viewEnd > model.viewStart else { return }
         let W = size.width, H = size.height
+
+        // selection highlight (drawn under the overlays)
+        if let s = selection {
+            let x0 = xFor(time: s.lo, W), x1 = xFor(time: s.hi, W)
+            ctx.fill(Path(CGRect(x: x0, y: 0, width: x1 - x0, height: H)), with: .color(.pink.opacity(0.25)))
+        }
 
         // frequency gridlines + labels (every 1000 Hz)
         var f = 1000.0
@@ -49,25 +79,22 @@ struct SpectrogramView: View {
             let y = H * (1 - f / model.fmax)
             ctx.stroke(Path { $0.move(to: .init(x: 0, y: y)); $0.addLine(to: .init(x: W, y: y)) },
                        with: .color(.white.opacity(0.18)), lineWidth: 0.5)
-            ctx.draw(Text("\(Int(f))").font(.system(size: 9)).foregroundStyle(.white.opacity(0.8)),
+            ctx.draw(Text("\(Int(f))").font(.system(size: 9)).foregroundColor(.white.opacity(0.8)),
                      at: .init(x: 26, y: y - 6))
             f += 1000
         }
 
-        func xFor(_ i: Int, _ n: Int) -> Double { W * (Double(i) + 0.5) / Double(n) }
+        func cx(_ i: Int, _ n: Int) -> Double { W * (Double(i) + 0.5) / Double(n) }
 
-        // intensity (yellow) on its own scale
         if showIntensity { drawCurve(ctx, model.intensity, W, H, .yellow, lineWidth: 2) }
-        // pitch (cyan) on its own scale
         if showPitch { drawCurve(ctx, model.pitch, W, H, .cyan, lineWidth: 2.5) }
-        // formants (red dots) on the spectrogram frequency axis
         if showFormants {
             for fc in model.formants {
                 let n = fc.values.count
                 for i in 0..<n {
                     let v = fc.values[i]
                     guard v.isFinite, Double(v) <= model.fmax else { continue }
-                    let x = xFor(i, n), y = H * (1 - Double(v) / model.fmax)
+                    let x = cx(i, n), y = H * (1 - Double(v) / model.fmax)
                     ctx.fill(Path(ellipseIn: CGRect(x: x - 1.3, y: y - 1.3, width: 2.6, height: 2.6)),
                              with: .color(.red))
                 }
@@ -75,8 +102,8 @@ struct SpectrogramView: View {
         }
 
         // time cursor
-        if let t = cursorTime {
-            let x = W * t / model.duration
+        if let t = cursorTime, t >= model.viewStart, t <= model.viewEnd {
+            let x = xFor(time: t, W)
             ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: H)) },
                        with: .color(.red), lineWidth: 1)
         }
@@ -105,7 +132,11 @@ struct SpectrogramView: View {
 struct AnnotationTierView: View {
     @Binding var annotations: [Annotation]
     @Binding var selected: UUID?
+    var viewStart: Double
+    var viewEnd: Double
     var duration: Double
+
+    private var span: Double { max(viewEnd - viewStart, 1e-6) }
 
     var body: some View {
         GeometryReader { geo in
@@ -115,13 +146,15 @@ struct AnnotationTierView: View {
                 Canvas { ctx, size in
                     let sorted = annotations.sorted { $0.start < $1.start }
                     for (idx, a) in sorted.enumerated() {
-                        let x = W * a.start / max(duration, 1e-6)
-                        ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: size.height)) },
-                                   with: .color(a.id == selected ? .blue : .gray), lineWidth: a.id == selected ? 2 : 1)
+                        let x = W * (a.start - viewStart) / span
+                        if a.start >= viewStart && a.start <= viewEnd {
+                            ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: size.height)) },
+                                       with: .color(a.id == selected ? .blue : .gray), lineWidth: a.id == selected ? 2 : 1)
+                        }
                         let next = idx + 1 < sorted.count ? sorted[idx + 1].start : duration
-                        let midX = W * ((a.start + next) / 2) / max(duration, 1e-6)
-                        if !a.label.isEmpty {
-                            ctx.draw(Text(a.label).font(.system(size: 11)), at: .init(x: midX, y: size.height / 2))
+                        let midX = W * ((a.start + next) / 2 - viewStart) / span
+                        if !a.label.isEmpty && midX > 0 && midX < W {
+                            ctx.draw(Text(a.label).font(.system(size: 12)), at: .init(x: midX, y: size.height / 2))
                         }
                     }
                 }
@@ -129,10 +162,9 @@ struct AnnotationTierView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { loc in
-                guard duration > 0 else { return }
-                let t = min(max(0, Double(loc.x / W) * duration), duration)
-                // select the interval containing t, or add a boundary if tapping near none
-                if let hit = nearestBoundary(t: t, W: W), abs(hit.start - t) * (W / duration) < 12 {
+                guard span > 0 else { return }
+                let t = min(max(viewStart, viewStart + Double(loc.x / W) * span), viewEnd)
+                if let hit = nearestBoundary(t: t), abs(hit.start - t) / span * W < 12 {
                     selected = hit.id
                 } else {
                     let a = Annotation(start: t)
@@ -142,7 +174,7 @@ struct AnnotationTierView: View {
         }
     }
 
-    private func nearestBoundary(t: Double, W: Double) -> Annotation? {
+    private func nearestBoundary(t: Double) -> Annotation? {
         annotations.min { abs($0.start - t) < abs($1.start - t) }
     }
 }

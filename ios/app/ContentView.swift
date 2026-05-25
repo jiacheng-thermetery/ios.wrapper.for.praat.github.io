@@ -1,4 +1,4 @@
-// ContentView.swift — Spraak UI: Analyze (spectrogram) + Script console.
+// ContentView.swift — Spraak UI: Analyze (spectrogram editor) + Script console.
 // GPL-3.0-or-later. UNOFFICIAL modified version of Praat.
 import SwiftUI
 
@@ -17,7 +17,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Analyze (record → spectrogram + overlays + slice + annotation)
+// MARK: - Analyze
 
 struct AnalyzeView: View {
     @StateObject private var model = PraatModel()
@@ -26,9 +26,11 @@ struct AnalyzeView: View {
     @State private var samples: [Float] = []
     @State private var rate: Double = 16000
     @State private var cursorTime: Double?
+    @State private var selection: TimeRange?
     @State private var slice: PraatModel.Slice?
     @State private var annotations: [Annotation] = []
     @State private var selectedAnnotation: UUID?
+    @State private var zoomHistory: [TimeRange] = []
 
     @State private var showPitch = true
     @State private var showFormants = true
@@ -36,20 +38,21 @@ struct AnalyzeView: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            controls
+            topControls
             overlayToggles
 
             if model.hasSound {
-                waveform.frame(height: 56)
-                SpectrogramView(model: model, cursorTime: $cursorTime,
+                waveform.frame(height: 52)
+                SpectrogramView(model: model, cursorTime: $cursorTime, selection: $selection,
                                 showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
-                    .frame(minHeight: 200)
-                    .overlay(alignment: .topTrailing) { legend.padding(4) }
-                tier.frame(height: 40)
+                    .frame(minHeight: 190)
+                timeAxis
+                AnnotationTierView(annotations: $annotations, selected: $selectedAnnotation,
+                                   viewStart: model.viewStart, viewEnd: model.viewEnd, duration: model.duration)
+                    .frame(height: 38)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(.gray.opacity(0.4)))
                 annotationEditor
-                if let s = slice, let t = cursorTime {
-                    SpectrumSliceView(slice: s, time: t)
-                }
+                if let s = slice, let t = cursorTime { SpectrumSliceView(slice: s, time: t) }
             } else {
                 Spacer()
                 Text("Tap ● Record (or ▶︎ Demo) to analyse a sound.")
@@ -58,39 +61,57 @@ struct AnalyzeView: View {
             }
         }
         .padding(8)
-        .onChange(of: cursorTime) { _, t in
-            slice = (t != nil) ? model.spectrumSlice(at: t!) : nil
-        }
+        .onChange(of: cursorTime) { _, t in slice = (t != nil) ? model.spectrumSlice(at: t!) : nil }
         .onAppear {
-            // Auto-load the demo on first launch so the analysis is visible immediately.
             if !model.hasSound {
-                loadDemo()   // show an example analysis immediately; Record replaces it with your audio
+                loadDemo()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { cursorTime = model.duration * 0.5 }
             }
         }
     }
 
-    private var controls: some View {
-        HStack(spacing: 10) {
+    // MARK: controls
+
+    private var topControls: some View {
+        HStack(spacing: 8) {
             Button { record() } label: {
                 Label(audio.isRecording ? "Stop" : "Record",
                       systemImage: audio.isRecording ? "stop.circle.fill" : "record.circle")
                     .foregroundStyle(audio.isRecording ? .red : .primary)
             }
             Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
-            Button { audio.play(samples, rate: rate) } label: { Label("Play", systemImage: "speaker.wave.2") }
-                .disabled(samples.isEmpty)
+
+            timeMenu
+            audioMenu
             Spacer()
-            if audio.permissionDenied {
-                Text("Mic denied").font(.caption2).foregroundStyle(.red)
-            }
+            if audio.permissionDenied { Text("Mic denied").font(.caption2).foregroundStyle(.red) }
         }
-        .buttonStyle(.bordered)
-        .font(.callout)
+        .buttonStyle(.bordered).controlSize(.small).font(.callout)
+    }
+
+    private var timeMenu: some View {
+        Menu {
+            Button("Show all") { showAll() }.keyboardShortcut("a")
+            Button("Zoom in") { zoomIn() }.keyboardShortcut("i")
+            Button("Zoom out") { zoomOut() }.keyboardShortcut("o")
+            Button("Zoom to selection") { zoomToSelection() }.keyboardShortcut("n").disabled(selection == nil)
+            Button("Zoom back") { zoomBack() }.keyboardShortcut("b").disabled(zoomHistory.isEmpty)
+            Divider()
+            Button("Scroll page back") { scroll(-1) }.keyboardShortcut(.upArrow, modifiers: [])
+            Button("Scroll page forward") { scroll(1) }.keyboardShortcut(.downArrow, modifiers: [])
+        } label: { Label("Time", systemImage: "arrow.left.and.right") }
+    }
+
+    private var audioMenu: some View {
+        Menu {
+            Button(audio.isPlaying ? "Stop" : "Play window") { playOrStop() }.keyboardShortcut(.space, modifiers: [])
+            Button("Play selection") { playSelection() }.disabled(selection == nil)
+            Button("Interrupt playing") { audio.stopPlayback() }.disabled(!audio.isPlaying)
+        } label: { Label("Audio", systemImage: audio.isPlaying ? "stop.fill" : "speaker.wave.2") }
     }
 
     private var overlayToggles: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Toggle(isOn: $showPitch) { Text("Pitch").foregroundStyle(.cyan) }
             Toggle(isOn: $showFormants) { Text("Formants").foregroundStyle(.red) }
             Toggle(isOn: $showIntensity) { Text("Intensity").foregroundStyle(.orange) }
@@ -98,10 +119,20 @@ struct AnalyzeView: View {
         .toggleStyle(.button).controlSize(.small).font(.caption)
     }
 
-    private var legend: some View {
-        VStack(alignment: .trailing, spacing: 1) {
-            Text("\(Int(model.fmax)) Hz").font(.system(size: 9)).foregroundStyle(.white)
+    private var timeAxis: some View {
+        HStack {
+            Text(String(format: "%.3f", model.viewStart)).font(.caption2).foregroundStyle(.secondary)
             Spacer()
+            if let s = selection {
+                Text(String(format: "sel %.3f–%.3f s (%.3f)", s.lo, s.hi, s.hi - s.lo))
+                    .font(.caption2).foregroundStyle(.pink)
+            } else if let c = cursorTime {
+                Text(String(format: "cursor %.3f s", c)).font(.caption2).foregroundStyle(.red)
+            } else {
+                Text(String(format: "%.3f s total", model.duration)).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(String(format: "%.3f", model.viewEnd)).font(.caption2).foregroundStyle(.secondary)
         }
     }
 
@@ -110,18 +141,22 @@ struct AnalyzeView: View {
             let n = model.waveMax.count
             guard n > 0 else { return }
             let midY = size.height / 2
+            if let s = selection {
+                let x0 = size.width * (s.lo - model.viewStart) / model.viewSpan
+                let x1 = size.width * (s.hi - model.viewStart) / model.viewSpan
+                ctx.fill(Path(CGRect(x: x0, y: 0, width: x1 - x0, height: size.height)), with: .color(.pink.opacity(0.25)))
+            }
             var amp = 0.0001
             for i in 0..<n { amp = max(amp, Double(max(abs(model.waveMin[i]), abs(model.waveMax[i])))) }
             var path = Path()
             for i in 0..<n {
                 let x = size.width * Double(i) / Double(n)
-                let yTop = midY - midY * Double(model.waveMax[i]) / amp
-                let yBot = midY - midY * Double(model.waveMin[i]) / amp
-                path.move(to: .init(x: x, y: yTop)); path.addLine(to: .init(x: x, y: yBot))
+                path.move(to: .init(x: x, y: midY - midY * Double(model.waveMax[i]) / amp))
+                path.addLine(to: .init(x: x, y: midY - midY * Double(model.waveMin[i]) / amp))
             }
             ctx.stroke(path, with: .color(.black), lineWidth: 0.5)
-            if let t = cursorTime {
-                let x = size.width * t / model.duration
+            if let t = cursorTime, t >= model.viewStart, t <= model.viewEnd {
+                let x = size.width * (t - model.viewStart) / model.viewSpan
                 ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: size.height)) },
                            with: .color(.red), lineWidth: 1)
             }
@@ -130,44 +165,54 @@ struct AnalyzeView: View {
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(.gray.opacity(0.4)))
     }
 
-    private var tier: some View {
-        AnnotationTierView(annotations: $annotations, selected: $selectedAnnotation, duration: model.duration)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(.gray.opacity(0.4)))
-    }
-
     @ViewBuilder private var annotationEditor: some View {
         if let id = selectedAnnotation, let idx = annotations.firstIndex(where: { $0.id == id }) {
             HStack {
                 Text(String(format: "%.3f s", annotations[idx].start)).font(.caption2).foregroundStyle(.secondary)
                 TextField("label", text: $annotations[idx].label)
                     .textFieldStyle(.roundedBorder).font(.callout)
-                Button(role: .destructive) {
-                    annotations.remove(at: idx); selectedAnnotation = nil
-                } label: { Image(systemName: "trash") }
+                Button(role: .destructive) { annotations.remove(at: idx); selectedAnnotation = nil }
+                    label: { Image(systemName: "trash") }
             }
         }
     }
 
+    // MARK: actions
+
     private func record() {
         audio.toggleRecording { captured, sr in
             guard !captured.isEmpty else { return }
-            samples = captured; rate = sr
-            resetAnalysis()
-            model.setSamples(captured, rate: sr)
+            samples = captured; rate = sr; resetAnalysis(); model.setSamples(captured, rate: sr)
         }
     }
     private func loadDemo() {
-        let (s, r) = DemoSound.vowel()
-        samples = s; rate = r
-        resetAnalysis()
-        model.setSamples(s, rate: r)
+        let (s, r) = DemoSound.vowel(); samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
     }
     private func resetAnalysis() {
-        cursorTime = nil; slice = nil; annotations = []; selectedAnnotation = nil
+        cursorTime = nil; selection = nil; slice = nil; annotations = []; selectedAnnotation = nil; zoomHistory = []
     }
+
+    private func zoomCenter() -> Double {
+        if let t = cursorTime, t >= model.viewStart, t <= model.viewEnd { return t }
+        return (model.viewStart + model.viewEnd) / 2
+    }
+    private func pushZoom() { zoomHistory.append(TimeRange(a: model.viewStart, b: model.viewEnd)) }
+    private func showAll() { pushZoom(); model.setView(0, model.duration) }
+    private func zoomIn() { pushZoom(); let c = zoomCenter(), s = model.viewSpan / 2; model.setView(c - s/2, c + s/2) }
+    private func zoomOut() { pushZoom(); let c = zoomCenter(), s = model.viewSpan * 2; model.setView(c - s/2, c + s/2) }
+    private func zoomToSelection() { guard let sel = selection else { return }; pushZoom(); model.setView(sel.lo, sel.hi) }
+    private func zoomBack() { guard let r = zoomHistory.popLast() else { return }; model.setView(r.a, r.b) }
+    private func scroll(_ dir: Double) {
+        let span = model.viewSpan
+        var s = model.viewStart + span * 0.8 * dir
+        s = max(0, min(s, model.duration - span))
+        model.setView(s, s + span)
+    }
+    private func playOrStop() { if audio.isPlaying { audio.stopPlayback() } else { audio.play(samples, rate: rate, from: model.viewStart, to: model.viewEnd) } }
+    private func playSelection() { if let s = selection { audio.play(samples, rate: rate, from: s.lo, to: s.hi) } }
 }
 
-// MARK: - Script console (the original tab)
+// MARK: - Script console
 
 struct ScriptConsoleView: View {
     @State private var script = """

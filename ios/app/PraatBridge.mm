@@ -102,28 +102,41 @@ double praatios_soundSampleRate (void) {
 	return theSound. get() ? 1.0 / theSound -> dx : 0.0;
 }
 
-int praatios_waveform (int n, float *outMin, float *outMax) {
+int praatios_waveform (double t0, double t1, int n, float *outMin, float *outMax) {
 	if (! theSound. get() || n <= 0) return 0;
 	const integer nx = theSound -> nx;
+	const double dx = theSound -> dx, xmin = theSound -> xmin;
 	constVEC z = theSound -> z [1];
+	auto clampIdx = [&] (double t) -> integer {
+		integer i = (integer) llround ((t - xmin) / dx);
+		return i < 0 ? 0 : (i > nx ? nx : i);
+	};
+	const integer s0 = clampIdx (t0);
+	integer s1 = clampIdx (t1);
+	if (s1 <= s0) s1 = (s0 < nx ? s0 + 1 : nx);
+	const integer span = s1 - s0;
 	for (int b = 0; b < n; b ++) {
-		const integer i0 = 1 + (integer) ((int64_t) b * nx / n);
-		const integer i1 = 1 + (integer) ((int64_t) (b + 1) * nx / n);
+		const integer a  = s0 + (integer) ((int64_t) b * span / n);
+		const integer bb = s0 + (integer) ((int64_t) (b + 1) * span / n);
 		double lo = 1e30, hi = -1e30;
-		for (integer i = i0; i < i1 && i <= nx; i ++) { if (z [i] < lo) lo = z [i]; if (z [i] > hi) hi = z [i]; }
+		for (integer i = a; i < bb && i < nx; i ++) { const double v = z [i + 1]; if (v < lo) lo = v; if (v > hi) hi = v; }
 		if (hi < lo) { lo = hi = 0.0; }
 		outMin [b] = (float) lo; outMax [b] = (float) hi;
 	}
 	return 1;
 }
 
-const float *praatios_spectrogram (double maxFreq, double windowLength,
+const float *praatios_spectrogram (double t0, double t1, double maxFreq, double windowLength,
 		int *outNx, int *outNy, double *outTmin, double *outTmax, double *outFmax,
 		double *outDbMin, double *outDbMax) {
 	if (! theSound. get()) return nullptr;
+	if (t1 - t0 < 3.0 * windowLength) return nullptr;   // window too small to analyse
 	try {
-		theSpectrogram = Sound_to_Spectrogram_e (theSound.get(), windowLength, maxFreq,
-				0.002, 20.0, kSound_to_Spectrogram_windowShape::GAUSSIAN, 8.0, 8.0);
+		autoSound part = Sound_extractPart (theSound.get(), t0, t1,
+				kSound_windowShape::RECTANGULAR, 1.0, true /* preserve times */);
+		const double timeStep = (t1 - t0) / 800.0;      // up to ~800 columns across the window
+		theSpectrogram = Sound_to_Spectrogram_e (part.get(), windowLength, maxFreq,
+				timeStep, 20.0, kSound_to_Spectrogram_windowShape::GAUSSIAN, 8.0, 8.0);
 	} catch (MelderError) { Melder_clearError (); return nullptr; }
 	Spectrogram s = theSpectrogram.get();
 	const integer nx = s -> nx, ny = s -> ny;
