@@ -42,6 +42,11 @@ static double gPitchFloor = 75.0, gPitchCeiling = 600.0;
 static double gFormantMaxFreq = 5500.0, gFormantWindow = 0.025, gFormantPreemph = 50.0;
 static int    gNumFormants = 5;
 
+/* [iOS port] The embedded interpreter has no script/notebook reference, so Praat's default
+ * trust proc would block side-effecting commands (e.g. "Save as WAV file"). This is a local,
+ * user-driven app running the user's own commands on their own device/files, so allow them. */
+static void iosAllowTrust (void * /*interpreter*/, conststring32 /*message*/) { }
+
 void praatios_init (void) {
 	static bool inited = false;
 	if (inited) return;
@@ -51,6 +56,7 @@ void praatios_init (void) {
 		praat_setStandAloneScriptText (U"# Spraak bootstrap\n");
 		praat_init (U"Spraak", U"6.4.67", 6467, 2026, 5, 21, U"x", U"y", 1, argv);
 		praat_uvafon_init ();
+		Melder_setTrustProc (iosAllowTrust);
 		inited = true;
 	} catch (MelderError) {
 		Melder_clearError ();

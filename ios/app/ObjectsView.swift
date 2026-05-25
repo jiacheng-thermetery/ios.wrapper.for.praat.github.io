@@ -59,6 +59,7 @@ struct ObjectsView: View {
     @State private var scriptField = ""
     @State private var showRename = false
     @State private var renameText = ""
+    @State private var exportItem: ExportItem?
 
     // a small curated command palette per class (everything else: type a command below)
     private let palette: [String: [(String, String)]] = [
@@ -109,6 +110,20 @@ struct ObjectsView: View {
             Button("Cancel", role: .cancel) {}
             Button("Rename") { if !renameText.isEmpty { m.run("Rename: \"\(renameText)\"") } }
         }
+        .sheet(item: $exportItem) { ActivityView(items: [$0.url]) }
+    }
+
+    /// Write the selected object to a temp file (WAV for Sound, Praat text otherwise) and share it.
+    private func saveSelected() {
+        guard let obj = m.objects.first(where: { m.selected.contains($0.id) }) else { return }
+        let isSound = obj.className == "Sound"
+        let base = obj.name.isEmpty ? obj.className : obj.name
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(base).\(isSound ? "wav" : "txt")")
+        try? FileManager.default.removeItem(at: url)
+        let cmd = isSound ? "Save as WAV file: \"\(url.path)\"" : "Save as text file: \"\(url.path)\""
+        m.run(cmd)
+        if FileManager.default.fileExists(atPath: url.path) { exportItem = ExportItem(url: url) }
     }
 
     private var toolbar: some View {
@@ -128,6 +143,8 @@ struct ObjectsView: View {
                     .disabled(m.selected.count != 1)
                 Button(role: .destructive) { m.run("Remove") } label: { Label("Remove", systemImage: "trash") }
                     .disabled(m.selected.isEmpty)
+                Button { saveSelected() } label: { Label("Save", systemImage: "square.and.arrow.up") }
+                    .disabled(m.selected.count != 1)
                 Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
             }
         }
@@ -190,4 +207,14 @@ struct ObjectsView: View {
         }
         m.runRaw("Read from file: \"\(tmp.path)\"")
     }
+}
+
+struct ExportItem: Identifiable { let id = UUID(); let url: URL }
+
+struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
