@@ -114,7 +114,7 @@ void Gui_getWindowPositioningBounds (double *x, double *y, double *width, double
 	Fonts, brushes.
 */
 
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppKit NSFont is macOS-only (used only by the cocoa backend)
 	NSFont *theMacGuiNormalLabelFont () {
 		static NSFont *font;
 		if (! font)

@@ -27,8 +27,11 @@
 #include "Sound.h"
 #include "Preferences.h"
 #include "../external/portaudio/portaudio.h"
+#if ! defined (_WIN32)
+	#include <unistd.h>   // [iOS port] read()/close() in the generic audio path
+#endif
 
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)
 	#include "macport_on.h"
 	#include "pa_mac_core.h"
 	#include "macport_off.h"
@@ -89,7 +92,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 	bool inputUsesPortAudio =
 		#if defined (_WIN32)
 			MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::MME_VIA_PORTAUDIO;
-		#elif defined (macintosh)
+		#elif defined (macintosh)   // [iOS port] enum selection only (no framework); iOS uses the CoreAudio enum value
 			MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::COREAUDIO_VIA_PORTAUDIO;
 		#elif defined (raspberrypi)
 			MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::JACK_VIA_PORTAUDIO;
@@ -97,7 +100,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 			MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::ALSA_OR_JACK_VIA_PORTAUDIO;
 		#endif
 	PaStream *portaudioStream = nullptr;
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)
 	#elif defined (_WIN32)
 		HWAVEIN hWaveIn = 0;
 	#else
@@ -112,7 +115,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		*/
 		volatile struct Sound_recordFixedTime_Info info = { 0 };
 		PaStreamParameters streamParameters = { 0 };
-		#if defined (macintosh)
+		#if defined (macintosh) && ! defined (PRAAT_IOS)
 			(void) gain;
 			(void) balance;
 		#elif defined (_WIN32)
@@ -138,12 +141,12 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		*/
 		bool supportsSamplingFrequency = true;
 		if (inputUsesPortAudio) {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 				if (sampleRate != 44100 && sampleRate != 48000 && sampleRate != 96000)
 					supportsSamplingFrequency = false;
 			#endif
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 				if (sampleRate != 44100 && sampleRate != 48000)
 					supportsSamplingFrequency = false;
 			#elif defined (linux)
@@ -176,7 +179,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 				MelderAudio_hasBeenInitialized = true;
 			}
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 			#elif ! defined (NO_AUDIO)
 				/*
@@ -221,7 +224,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 			const PaDeviceInfo *paDeviceInfo = Pa_GetDeviceInfo (streamParameters. device);
 			Melder_casual (U"Name: ", Melder_peek8to32_u (paDeviceInfo -> name));
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (linux) && ! defined (NO_AUDIO)
 				fd_mixer = open ("/dev/mixer", O_WRONLY);		
 				if (fd_mixer == -1)
@@ -238,7 +241,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		if (inputUsesPortAudio) {
 			/* Taken from Audio Control Panel. */
 		} else {
-			#if defined (macintosh) || defined (_WIN32)
+			#if (defined (macintosh) && ! defined (PRAAT_IOS)) || defined (_WIN32)
 				/* Taken from Audio Control Panel. */
 			#elif defined (linux) && ! defined (NO_AUDIO)
 				val = ( gain <= 0.0 ? 0 : gain >= 1.0 ? 100 : Melder_iround (gain * 100) );
@@ -269,7 +272,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		if (inputUsesPortAudio) {
 			// Set while opening.
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (linux) && ! defined (NO_AUDIO)
 				int sampleRate_int = (int) sampleRate;
 				if (ioctl (fd, SNDCTL_DSP_SPEED, & sampleRate_int) == -1)
@@ -285,7 +288,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		if (inputUsesPortAudio) {
 			streamParameters. channelCount = 1;
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (linux) && ! defined (NO_AUDIO)
 				val = 1;
 				if (ioctl (fd, SNDCTL_DSP_CHANNELS, & val) == -1)
@@ -301,7 +304,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		if (inputUsesPortAudio) {
 			streamParameters. sampleFormat = paInt16;
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (linux) && ! defined (NO_AUDIO)
 				#if __BYTE_ORDER == __BIG_ENDIAN
 					val = AFMT_S16_BE;
@@ -334,7 +337,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 		*/
 		if (inputUsesPortAudio) {
 			streamParameters. suggestedLatency = Pa_GetDeviceInfo (streamParameters. device) -> defaultLowInputLatency;
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 				PaMacCoreStreamInfo macCoreStreamInfo = { 0 };
 				macCoreStreamInfo. size = sizeof (PaMacCoreStreamInfo);
 				macCoreStreamInfo. hostApiType = paCoreAudio;
@@ -357,7 +360,7 @@ autoSound Sound_record_fixedTime (int inputSource, double gain, double balance, 
 			if (err)
 				Melder_throw (U"start ", Melder_peek8to32_u (Pa_GetErrorText (err)));
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				waveFormat. cbSize = 0;
 				err = waveInOpen (& hWaveIn, WAVE_MAPPER, & waveFormat, 0, 0, CALLBACK_NULL);
@@ -378,7 +381,7 @@ for (i = 1; i <= numberOfSamples; i ++) trace (U"Started ", buffer [i]);
 			}
 for (i = 1; i <= numberOfSamples; i ++) trace (U"Recorded ", buffer [i]);
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				waveHeader. dwFlags = 0;
 				waveHeader. lpData = (char *) buffer.asArgumentToFunctionThatExpectsZeroBasedArray();
@@ -424,7 +427,7 @@ for (i = 1; i <= numberOfSamples; i ++) trace (U"Recorded ", buffer [i]);
 			Pa_StopStream (portaudioStream);
 			Pa_CloseStream (portaudioStream);
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				err = waveInClose (hWaveIn);
 				if (err != MMSYSERR_NOERROR)
@@ -445,7 +448,7 @@ for (i = 1; i <= numberOfSamples; i ++) trace (U"Recorded ", buffer [i]);
 			if (portaudioStream)
 				Pa_CloseStream (portaudioStream);
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				if (hWaveIn != 0)
 					waveInClose (hWaveIn);

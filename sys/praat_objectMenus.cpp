@@ -948,7 +948,7 @@ void praat_addMenus2 () {
 	praat_addMenuCommand (U"Objects", U"ApplicationHelp", itemTitle_about.string,
 			nullptr, GuiMenu_UNHIDABLE, PRAAT__About);
 
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] open-document is handled by the app shell (UIDocument)
 		Gui_setOpenDocumentCallback (cb_openDocument, cb_finishedOpeningDocuments);
 	#endif
 }

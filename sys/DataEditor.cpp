@@ -108,7 +108,7 @@ static void gui_button_cb_change (DataSubEditor me, GuiButtonEvent /* event */) 
 		#elif gtk
 			gboolean visible;
 			g_object_get (G_OBJECT (my d_fieldData [irow]. text -> d_widget), "visible", & visible, nullptr);
-		#elif defined (macintosh)
+		#elif defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] Cocoa-only; iOS uses the generic #else
 			const bool visible = ! [(GuiCocoaTextField *) my d_fieldData [irow]. text -> d_widget   isHidden];
 		#else
 			const bool visible = false;

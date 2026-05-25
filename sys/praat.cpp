@@ -24,8 +24,8 @@
 	#include <signal.h>
 #endif
 #include <locale.h>
-#if defined (UNIX)
-	#include <unistd.h>
+#if defined (UNIX) || defined (macintosh)
+	#include <unistd.h>   // [iOS port] isatty, getpid (POSIX, present on iOS)
 #endif
 #if defined (_WIN32)
 	#include <windows.h>
@@ -962,7 +962,7 @@ void praat_dontUsePictureWindow () { praatP.dontUsePictureWindow = true; }
 	static void cb_finishedOpeningDocuments () {
 		praat_updateSelection ();
 	}
-#elif macintosh
+#elif defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppleEvent/sendpraat IPC is macOS-only
 	static int (*theUserMessageCallback) (char32 *message);
 	static void mac_setUserMessageCallback (int (*userMessageCallback) (char32 *message)) {
 		theUserMessageCallback = userMessageCallback;
@@ -1158,7 +1158,7 @@ static bool tryToSwitchToRunningPraat (bool foundTheOpenOption, bool foundTheSen
 		Figure out the Process ID of an already running instance of Praat.
 	*/
 	integer pidOfRunningPraat = 0;   // mutable, to be filled in from file
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] NSRunningApplication is macOS-only; iOS is single-instance
 		/*
 			We have to implement this differently from how sendpraat implements this,
 			because sendpraat just sends its message to a program with application signature 'PpgB',
@@ -1227,7 +1227,7 @@ static bool tryToSwitchToRunningPraat (bool foundTheOpenOption, bool foundTheSen
 		Bring the running Praat to the foreground.
 	*/
 	Melder_casual (U"An instance of Praat that is not me is already running.");
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] Process Manager / AppKit activation is macOS-only
 		int activationVersion = 1;   // 1 or 2
 		if (activationVersion == 1) {   // deprecated since OS X 10.9, but it works, unlike the alternative
 			ProcessSerialNumber psnOfRunningPraat;
@@ -1304,7 +1304,7 @@ static bool tryToSwitchToRunningPraat (bool foundTheOpenOption, bool foundTheSen
 				U"The --send-or-form switch should be followed by precisely one argument, namely the name of the script file.");
 	}
 	autostring8 text8 = Melder_32to8 (text32.string);
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppleEvent send is macOS-only; falls to default `return false`
 		const int timeOut = 0;
 		AESendMode aeOptions = ( timeOut == 0 ? kAENoReply : kAEWaitReply ) | kAECanInteract | kAECanSwitchLayer;
 		int appleEventVersion = 2;   // 1, 2 or 3
@@ -1650,6 +1650,10 @@ static void interpretCommandLineArguments (bool weWereStartedFromTheCommandLine,
 	if (!! thePraatStandAloneScriptText) {
 		Melder_batch = true;
 		userWantsGui = false;
+		praatP.userWantsToOpen = false;            // [iOS port] a stand-alone (embedded) app never opens a doc...
+		praatP.userWantsExistingInstance = false;  // [iOS port] ...nor hands off to an existing instance; these were
+		                                           // computed above from userWantsGui, which only just became false.
+		                                           // Without this, the asserts below fail when launched without a TTY.
 		if (praatP.foundTheRunSwitch) {
 			MelderInfo_open ();
 			MelderInfo_writeLine (U"The switch --run is not compatible with running a stand-alone script.", U"\n");
@@ -1871,7 +1875,7 @@ void praat_init (conststring32 title,
 	/*
 		Check whether we can transfer control to an already running instance of Praat.
 	*/
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppKit NSApplication is macOS-only; iOS hosts via UIApplication in the app shell
 		NSApplication *theApp = [GuiCocoaApplication sharedApplication];   // initialize, so that our bundle identifier exists even if we started from outside Xcode
 	#elif defined (_WIN32)
 		theWinApplicationWindow = GuiWin_initialize1 (Melder_upperCaseAppName());
@@ -1900,7 +1904,7 @@ void praat_init (conststring32 title,
 		if (! Melder_batch)
 			motif_win_setUserMessageCallback (cb_userMessage);
 	#endif
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppleEvent IPC is macOS-only
 		if (! Melder_batch)
 			mac_setUserMessageCallback (cb_userMessage);   // not earlier
 	#endif
@@ -1954,7 +1958,7 @@ void praat_init (conststring32 title,
 		trace (U"adding fixed buttons without GUI");
 		praat_addFixedButtons (nullptr);
 	} else {
-		#ifdef macintosh
+		#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppleEvent handler is macOS-only
 			trace (U"initializing the Gui early (MacOS)");
 			AEInstallEventHandler (758934755, 0, (AEEventHandlerProcPtr) (mac_processSignal8), 0, false);   // for receiving sendpraat
 			injectMessageAndInformationProcs (raam);   // BUG: default Melder_assert would call printf recursively!!!

@@ -676,7 +676,7 @@ int Praat_tests (kPraatTests itest, conststring32 arg1, conststring32 arg2, cons
 			//  Gflops is --undefined--
 		} break;
 		case kPraatTests::TIME_NS_DATE: {
-			#ifdef macintosh
+			#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] NSDate timing test is macOS-only
 				NSDate *till = [NSDate   dateWithTimeIntervalSinceNow: 1.0];
 				integer count = 0;
 				while ([[NSDate date]   compare: till] == NSOrderedAscending)

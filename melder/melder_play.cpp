@@ -21,7 +21,7 @@
 	#include <windows.h>
 #endif
 
-#ifdef macintosh
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] alert-sound path below is macOS-only
 	#include "macport_on.h"
 	#include <AudioToolbox/AudioToolbox.h>
 	#include "macport_off.h"
@@ -46,8 +46,8 @@ static int defaultPublishPlayed () {
 }
 
 void Melder_beep () {
-	#ifdef macintosh
-		AudioServicesPlayAlertSound (kSystemSoundID_UserPreferredAlert);
+	#if defined (macintosh) && ! defined (PRAAT_IOS)
+		AudioServicesPlayAlertSound (kSystemSoundID_UserPreferredAlert);   // kSystemSoundID_* is macOS-only
 	#else
 		fprintf (Melder_stderr, "\a");
 	#endif

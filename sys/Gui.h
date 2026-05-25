@@ -70,9 +70,11 @@ constexpr bool theCommandKeyIsToTheLeftOfTheOptionKey =
 		#include <pango/pangocairo.h>
 	#endif
 #elif defined (macintosh)
-	#include "macport_on.h"
-    #include <Cocoa/Cocoa.h>
-	#include "macport_off.h"
+	#if cocoa   // [iOS port] only the Cocoa backend needs AppKit; barren (cocoa==0, e.g. iOS) skips it
+		#include "macport_on.h"
+		#include <Cocoa/Cocoa.h>
+		#include "macport_off.h"
+	#endif
 #elif defined (_WIN32)
 	#include "winport_on.h"
 	#include <windows.h>
@@ -1106,7 +1108,7 @@ Thing_define (GuiText, GuiControl) {
 		GuiCocoaScrolledWindow *d_cocoaScrollView;
 		GuiCocoaTextView *d_cocoaTextView;
 		double d_macFontSize;
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] legacy Carbon MLTE; iOS uses the generic #else
 		TXNObject d_macMlteObject;
 		TXNFrameID d_macMlteFrameId;
 	#else

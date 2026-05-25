@@ -18,7 +18,9 @@
 
 #if defined (macintosh)
 	#include <sys/time.h>
-	#include <CoreAudio/CoreAudio.h>
+	#if ! defined (PRAAT_IOS)
+		#include <CoreAudio/CoreAudio.h>   // [iOS port] CoreAudio HAL is macOS-desktop-only
+	#endif
 #elif defined (_WIN32)
 	#include <windows.h>
 #elif defined (linux)
@@ -975,7 +977,7 @@ void context_state_cb (pa_context *context, void *userdata) {
 #endif
 
 static bool deviceHasChanged = false;
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] CoreAudio HAL device listener is macOS-only
 static int theCoreaudioPropertyListener (unsigned int, unsigned int, const AudioObjectPropertyAddress * _Nonnull, void * _Nullable) {
 	Melder_casual (U"coreaudio_property_listener");
 	deviceHasChanged = true;
@@ -1011,7 +1013,7 @@ static bool interruptedByEscapeKey () {
 void MelderAudio_play16 (int16 *buffer, integer sampleRate, integer numberOfSamples, integer numberOfChannels,
 	bool (*playCallback) (void *playClosure, integer numberOfSamplesPlayed), void *playClosure)
 {
-	#if defined (macintosh)
+	#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] CoreAudio HAL device listener is macOS-only
 	{// scope
 		static bool inited;
 		if (! inited) {
@@ -1167,7 +1169,7 @@ void MelderAudio_play16 (int16 *buffer, integer sampleRate, integer numberOfSamp
 						// TODO: implement a reaction to the Escape key
 					#elif cocoa
 						// TODO: implement a reaction to the Escape key
-					#elif defined (macintosh)
+					#elif defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] Carbon Event Manager is macOS-only
 						EventRecord event;
 						if (EventAvail (keyDownMask, & event)) {
 							/*

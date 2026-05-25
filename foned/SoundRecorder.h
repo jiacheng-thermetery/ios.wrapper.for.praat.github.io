@@ -27,7 +27,7 @@
 
 #include "../external/portaudio/portaudio.h"
 #if defined (_WIN32)
-#elif defined (macintosh)
+#elif defined (macintosh) && ! defined (PRAAT_IOS)
 #elif defined (linux)
 	#include <sys/types.h>
 	#include <sys/stat.h>
@@ -109,7 +109,7 @@ Thing_define (SoundRecorder, Editor) {
 		WAVEHDR waveHeader [3];
 		MMRESULT err;
 		short buffertje1 [1000*2], buffertje2 [1000*2];
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (PRAAT_IOS)
 		short macSource [1+8];
 		Str255 hybridDeviceNames [1+8];
 		int32 refNum;

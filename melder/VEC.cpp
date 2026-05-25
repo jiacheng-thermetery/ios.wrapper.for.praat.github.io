@@ -19,13 +19,13 @@
 #include "melder.h"
 #include "../dwsys/NUM2.h"   /* for NUMsort2 */
 
-#ifdef macintosh
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] use CPU path; Accelerate re-enable is a future optimisation
 	#include "macport_on.h"
 	#include <Accelerate/Accelerate.h>
 	#include "macport_off.h"
 #endif
 
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)
 void _add_macfast_VEC_out (VECVU const& target, constVECVU const& x, constVECVU const& y) noexcept {
 	integer n = target.size;
 	vDSP_vaddD (& x [1], x.stride, & y [1], y.stride, & target [1], target.stride, integer_to_uinteger_a (n));

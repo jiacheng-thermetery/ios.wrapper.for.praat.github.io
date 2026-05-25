@@ -193,7 +193,7 @@ class GuiControlBlockValueChangedCallbacks {
 
 /********** FONTS, BRUSHES **********/
 
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] AppKit NSFont is macOS-only
 	extern NSFont *theMacGuiNormalLabelFont (), *theMacGuiBoldLabelFont ();
 #elif defined (_WIN32)
 	extern HFONT theWinGuiNormalLabelFont (), theWinGuiBoldLabelFont ();

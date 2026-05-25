@@ -21,7 +21,7 @@
 #include "Formula.h"
 #if defined (_WIN32)
 	#include <GraphicsP.h>
-#elif defined (macintosh)
+#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 	#include "macport_on.h"
 	#include <Cocoa/Cocoa.h>
 	#include "macport_off.h"
@@ -159,7 +159,7 @@ autoPhoto Photo_readFromImageFile (MelderFile file) {
 				}
 			}
 			return me;
-		#elif defined (macintosh)
+		#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 			autoPhoto me;
 			CFURLRef url = CFURLCreateWithFileSystemPath (nullptr, (CFStringRef) MelderFile_peekPathCfstring (file), kCFURLPOSIXPathStyle, false);
 			CGImageSourceRef imageSource = CGImageSourceCreateWithURL (url, nullptr);
@@ -224,7 +224,7 @@ autoPhoto Photo_readFromImageFile (MelderFile file) {
 	}
 }
 
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (NO_GRAPHICS)
 	#include <time.h>
 	#include "macport_on.h"
 	static void _mac_releaseDataCallback (void * /* info */, const void *data, size_t /* size */) {
@@ -301,7 +301,7 @@ autoPhoto Photo_readFromImageFile (MelderFile file) {
 	}
 #endif
 
-#ifdef macintosh
+#if defined (macintosh) && ! defined (NO_GRAPHICS)
 	static void _mac_saveAsImageFile (Photo me, MelderFile file, const void *which) {
 		const integer bytesPerRow = my nx * 4;
 		const integer numberOfRows = my ny;
@@ -348,7 +348,7 @@ autoPhoto Photo_readFromImageFile (MelderFile file) {
 void Photo_saveAsPNG (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/png");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypePNG);
 	#elif defined (linux) && ! defined (NO_GRAPHICS)
 		_lin_saveAsImageFile (me, file, U"image/png");
@@ -358,7 +358,7 @@ void Photo_saveAsPNG (Photo me, MelderFile file) {
 void Photo_saveAsTIFF (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/tiff");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeTIFF);
 	#else
 		(void) me;
@@ -369,7 +369,7 @@ void Photo_saveAsTIFF (Photo me, MelderFile file) {
 void Photo_saveAsGIF (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/gif");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeGIF);
 	#else
 		(void) me;
@@ -380,7 +380,7 @@ void Photo_saveAsGIF (Photo me, MelderFile file) {
 void Photo_saveAsWindowsBitmapFile (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/bmp");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeBMP);
 	#else
 		(void) me;
@@ -391,7 +391,7 @@ void Photo_saveAsWindowsBitmapFile (Photo me, MelderFile file) {
 void Photo_saveAsJPEG (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/jpeg");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeJPEG);
 	#else
 		(void) me;
@@ -402,7 +402,7 @@ void Photo_saveAsJPEG (Photo me, MelderFile file) {
 void Photo_saveAsJPEG2000 (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/jpeg2000");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeJPEG2000);
 	#else
 		(void) me;
@@ -413,7 +413,7 @@ void Photo_saveAsJPEG2000 (Photo me, MelderFile file) {
 void Photo_saveAsAppleIconFile (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/ICNS");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeAppleICNS);
 	#else
 		(void) me;
@@ -424,7 +424,7 @@ void Photo_saveAsAppleIconFile (Photo me, MelderFile file) {
 void Photo_saveAsWindowsIconFile (Photo me, MelderFile file) {
 	#if defined (_WIN32)
 		_win_saveAsImageFile (me, file, U"image/icon");
-	#elif defined (macintosh)
+	#elif defined (macintosh) && ! defined (NO_GRAPHICS)
 		_mac_saveAsImageFile (me, file, kUTTypeICO);
 	#else
 		(void) me;

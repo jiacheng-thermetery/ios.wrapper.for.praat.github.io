@@ -267,7 +267,7 @@ void Picture_readFromPraatPictureFile (Picture me, MelderFile file) {
 	}
 }
 
-#ifdef macintosh
+#if defined (macintosh) && ! defined (PRAAT_IOS)   // [iOS port] Carbon Pasteboard + PDF clipboard is macOS-only
 static size_t appendBytes (void *info, const void *buffer, size_t count) {
 	CFDataAppendBytes ((CFMutableDataRef) info, (const UInt8 *) buffer, uinteger_to_integer_a (count));
 	return count;
@@ -299,6 +299,12 @@ void Picture_copyToClipboard (Picture me) {
 		Forget the clipboard.
 	*/
 	CFRelease (clipboard);
+}
+#endif
+#if defined (macintosh) && defined (PRAAT_IOS)
+void Picture_copyToClipboard (Picture me) {
+	(void) me;
+	Melder_throw (U"Copy to clipboard is not available on iOS.");   // [iOS port] no Carbon Pasteboard; use the app-level share sheet
 }
 #endif
 

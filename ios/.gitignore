@@ -1,0 +1,7 @@
+# Build artifacts of the Spraak port (do not commit).
+praat_barren_ios
+embed_test
+*.o
+app/*.o
+app/Spraak.app/
+screenshot-*.png

@@ -38,3 +38,7 @@ Praat.app
 .Rdata
 .Rhistory
 .Rproj.user
+
+# iOS port: linked binaries without an extension (object files/libs already ignored above)
+ios/praat_barren_ios
+ios/embed_test

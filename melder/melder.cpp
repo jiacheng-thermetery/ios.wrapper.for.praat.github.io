@@ -25,8 +25,8 @@
 
 #include "../dwsys/NUMmachar.h"
 #include "../external/gsl/gsl_errno.h"
-#ifdef macintosh
-	#include <Carbon/Carbon.h>   // Gestalt
+#if defined (macintosh) && ! defined (PRAAT_IOS)
+	#include <Carbon/Carbon.h>   // Gestalt; [iOS port] Carbon is macOS-desktop-only (absent on iOS)
 #endif
 
 void Melder_init () {
@@ -35,10 +35,11 @@ void Melder_init () {
 	NUMrandom_initializeSafelyAndUnpredictably ();
 	Melder_alloc_init ();
 	Melder_audiofiles_init ();
-	#ifdef macintosh
+	#if defined (macintosh) && ! defined (PRAAT_IOS)
 		NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
 		Melder_systemVersion = version. majorVersion * 10000 + version. minorVersion * 100 + version. patchVersion;
 	#endif
+	// [iOS port] On iOS, Melder_systemVersion stays 0 (avoids requiring Foundation/Obj-C in the core).
 	#ifdef linux
 		const char *gdkBackend = getenv ("GDK_BACKEND");   // this setting rules all the others; GDK typically supports wayland, x11, and broadway
 		if (gdkBackend) {

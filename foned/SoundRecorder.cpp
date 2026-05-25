@@ -30,11 +30,14 @@
  */
 
 #include <errno.h>
+#if ! defined (_WIN32)
+	#include <unistd.h>   // [iOS port] read()/close() in the generic recording path
+#endif
 #include "SoundRecorder.h"
 #include "Sound_and_Spectrum.h"
 #include "machine.h"
 #include "EditorM.h"
-#if defined (macintosh)
+#if defined (macintosh) && ! defined (PRAAT_IOS)
 	#include "pa_mac_core.h"
 #endif
 
@@ -81,7 +84,7 @@ static struct {
 } theControlPanel =
 #if defined (linux)
 	{ 1, 200, 200, 44100.0 };
-#elif defined (macintosh)
+#elif defined (macintosh) && ! defined (PRAAT_IOS)
 	{ 1, 26, 26, 44100.0 };
 #else
 	{ 1, 26, 26, 44100.0 };
@@ -259,7 +262,7 @@ void structSoundRecorder :: v9_destroy () noexcept {
 				waveInUnprepareHeader (our hWaveIn, & our waveHeader [0], sizeof (WAVEHDR));
 				waveInClose (our hWaveIn);
 			}
-		#elif defined (macintosh)
+		#elif defined (macintosh) && ! defined (PRAAT_IOS)
 		#elif defined (UNIX)
 			if (our fd != -1)
 				close (our fd);
@@ -297,7 +300,7 @@ static void showMeter (SoundRecorder me, const short *buffertje, integer nsamp) 
 	Graphics_clearWs (my graphics.get());
 	if (nsamp < 1) {
 		Graphics_setWindow (my graphics.get(), 0.0, 1.0, 0.0, 1.0);
-		#if defined (macintosh)
+		#if defined (macintosh) && ! defined (PRAAT_IOS)
 			Graphics_setColour (my graphics.get(), Melder_WHITE);
 			Graphics_fillRectangle (my graphics.get(), 0.2, 0.8, 0.3, 0.7);
 		#endif
@@ -449,7 +452,7 @@ static WORKPROC_RETURN workProc (WORKPROC_ARGS) {
 						Asynchronous recording: do nothing.
 					*/
 				} else {
-					#if defined (macintosh) || defined (_WIN32)
+					#if (defined (macintosh) && ! defined (PRAAT_IOS)) || defined (_WIN32)
 						/*
 							Asynchronous recording on these systems: do nothing.
 						*/
@@ -493,7 +496,7 @@ static WORKPROC_RETURN workProc (WORKPROC_ARGS) {
 						mmtime. wType = TIME_BYTES;
 						if (waveInGetPosition (my hWaveIn, & mmtime, sizeof (MMTIME)) == MMSYSERR_NOERROR)
 							my lastSample = mmtime. u.cb / (sizeof (short) * my numberOfChannels);
-					#elif defined (macintosh)
+					#elif defined (macintosh) && ! defined (PRAAT_IOS)
 					#endif
 				}
 				my firstSample = my lastSample - 3000;
@@ -569,7 +572,7 @@ static void gui_button_cb_record (SoundRecorder me, GuiButtonEvent /* event */) 
 				streamParameters. channelCount = my numberOfChannels;
 				streamParameters. sampleFormat = paInt16;
 				streamParameters. suggestedLatency = my deviceInfos [theControlPanel. inputSource] -> defaultLowInputLatency;
-				#if defined (macintosh)
+				#if defined (macintosh) && ! defined (PRAAT_IOS)
 					PaMacCoreStreamInfo macCoreStreamInfo = { };
 					macCoreStreamInfo. size = sizeof (PaMacCoreStreamInfo);
 					macCoreStreamInfo. hostApiType = paCoreAudio;
@@ -606,7 +609,7 @@ static void gui_button_cb_record (SoundRecorder me, GuiButtonEvent /* event */) 
 					win_waveInPrepareHeader (me, 0);
 					win_waveInAddBuffer (me, 0);
 					win_waveInStart (me);
-				#elif defined (macintosh)
+				#elif defined (macintosh) && ! defined (PRAAT_IOS)
 				#endif
 			}
 		}
@@ -692,7 +695,7 @@ static void initialize (SoundRecorder me) {
 				(void) me;
 			#endif
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				(void) me;
 			#elif defined (linux) && ! defined (NO_AUDIO)
@@ -752,7 +755,7 @@ static void gui_radiobutton_cb_input (SoundRecorder me, GuiRadioButtonEvent even
 	} else {
 		#if defined (_WIN32)
 			// deferred to the start of recording
-		#elif defined (macintosh)
+		#elif defined (macintosh) && ! defined (PRAAT_IOS)
 			//SPBCloseDevice (my refNum);
 			try {
 				initialize (me);
@@ -806,7 +809,7 @@ static void gui_radiobutton_cb_fsamp (SoundRecorder me, GuiRadioButtonEvent even
 		} else {
 			#if defined (_WIN32)
 				// deferred to the start of recording
-			#elif defined (macintosh)
+			#elif defined (macintosh) && ! defined (PRAAT_IOS)
 				//SPBCloseDevice (my refNum);
 				initialize (me);
 			#elif defined (linux) && ! defined (NO_AUDIO)
@@ -1028,7 +1031,7 @@ autoSoundRecorder SoundRecorder_create (int numberOfChannels) {
 		my inputUsesPortAudio =
 			#if defined (_WIN32)
 				MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::MME_VIA_PORTAUDIO;
-			#elif defined (macintosh)
+			#elif defined (macintosh)   // [iOS port] enum selection only (no framework); iOS uses the CoreAudio enum value
 				MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::COREAUDIO_VIA_PORTAUDIO;
 			#elif defined (raspberrypi)
 				MelderAudio_getInputSoundSystem () == kMelder_inputSoundSystem::JACK_VIA_PORTAUDIO;
@@ -1051,7 +1054,7 @@ autoSoundRecorder SoundRecorder_create (int numberOfChannels) {
 					waveInGetDevCaps (i, & caps, sizeof (WAVEINCAPS));
 					/*Melder_casual (U"Name of device ", i, U": ", Melder_peek16to32 (aps. szPname));*/
 				}
-			#elif defined (macintosh)
+			#elif defined (macintosh) && ! defined (PRAAT_IOS)
 				SInt32 soundFeatures;
 				if (Gestalt (gestaltSoundAttr, & soundFeatures) ||
 						! (soundFeatures & (1 << gestaltSoundIOMgrPresent)) ||
@@ -1070,7 +1073,7 @@ autoSoundRecorder SoundRecorder_create (int numberOfChannels) {
 		if (my inputUsesPortAudio) {
 			my synchronous = false;
 		} else {
-			#if defined (macintosh) || defined (_WIN32)
+			#if (defined (macintosh) && ! defined (PRAAT_IOS)) || defined (_WIN32)
 				my synchronous = false;
 			#else
 				my synchronous = true;
@@ -1139,7 +1142,7 @@ autoSoundRecorder SoundRecorder_create (int numberOfChannels) {
 					);
 				if (deviceInfo -> maxInputChannels > 0 && my numberOfInputDevices < SoundRecorder_IDEVICE_MAX) {
 					my devices [++ my numberOfInputDevices]. canDo = true;
-					#if defined (macintosh) || defined (_WIN32)   // only one host API
+					#if (defined (macintosh) && ! defined (PRAAT_IOS)) || defined (_WIN32)   // only one host API
 						str32ncpy (my devices [my numberOfInputDevices]. fullName, Melder_peek8to32_u (deviceInfo -> name), SoundRecorder_Device :: maximumLengthOfFullName);
 					#else
 						const PaHostApiIndex hostApiIndex = deviceInfo -> hostApi;
@@ -1159,7 +1162,7 @@ autoSoundRecorder SoundRecorder_create (int numberOfChannels) {
 			if (my numberOfInputDevices == 0)
 				Melder_throw (U"No input devices available.");
 		} else {
-			#if defined (macintosh)
+			#if defined (macintosh) && ! defined (PRAAT_IOS)
 			#elif defined (_WIN32)
 				// No device info: use Windows mixer.
 			#else
