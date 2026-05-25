@@ -48,6 +48,10 @@ struct AnalyzeView: View {
     @State private var showFormants = true
     @State private var showIntensity = true
     @State private var pictureExport: ExportItem?
+    @State private var showSpeak = false
+    @State private var speakText = "Hello from Praat on iOS"
+    @State private var speakLang = "English (Great Britain)"
+    @State private var speakVoice = "Female1"
 
     var body: some View {
         VStack(spacing: 6) {
@@ -96,6 +100,9 @@ struct AnalyzeView: View {
             if case .success(let url) = result { openFile(url) }
         }
         .sheet(item: $pictureExport) { ActivityView(items: [$0.url]) }
+        .sheet(isPresented: $showSpeak) {
+            SpeakView(text: $speakText, language: $speakLang, voice: $speakVoice) { speak() }
+        }
         .onAppear {
             if !model.hasSound {
                 loadDemo()
@@ -115,6 +122,7 @@ struct AnalyzeView: View {
                         .foregroundStyle(audio.isRecording ? .red : .primary)
                 }
                 Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
+                Button { showSpeak = true } label: { Label("Speak", systemImage: "text.bubble") }
                 Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
                 timeMenu
                 audioMenu
@@ -235,6 +243,26 @@ struct AnalyzeView: View {
     private func openFile(_ url: URL) {
         guard let (s, r) = AudioEngine.decode(url: url) else { return }
         samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+    }
+
+    /// Synthesize speech with eSpeak (via the engine), then load it into the Analyze view.
+    private func speak() {
+        let safe = speakText.replacingOccurrences(of: "\"", with: "\"\"")
+            .replacingOccurrences(of: "\n", with: " ")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("speech.wav")
+        try? FileManager.default.removeItem(at: url)
+        let script = """
+        synth = Create SpeechSynthesizer: "\(speakLang)", "\(speakVoice)"
+        selectObject: synth
+        sound = To Sound: "\(safe)", "no"
+        selectObject: sound
+        Save as WAV file: "\(url.path)"
+        removeObject: synth, sound
+        """
+        _ = String(cString: praatios_run(script))
+        if let (s, r) = AudioEngine.decode(url: url) {
+            samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+        }
     }
     private func resetAnalysis() {
         cursorTime = nil; selection = nil; slice = nil; annotations = []; selectedAnnotation = nil; zoomHistory = []
@@ -401,5 +429,37 @@ struct AboutView: View {
             .navigationTitle("About")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+struct SpeakView: View {
+    @Binding var text: String
+    @Binding var language: String
+    @Binding var voice: String
+    var onSpeak: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    private let languages = ["English (Great Britain)", "English (America)", "French (France)",
+                             "German", "Spanish (Spain)", "Italian", "Dutch", "Russian",
+                             "Mandarin Chinese", "Japanese"]
+    private let voices = ["Female1", "Male1", "default"]
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Text") {
+                    TextField("text to speak", text: $text, axis: .vertical).lineLimit(2...5)
+                }
+                Section {
+                    Picker("Language", selection: $language) { ForEach(languages, id: \.self) { Text($0) } }
+                    Picker("Voice", selection: $voice) { ForEach(voices, id: \.self) { Text($0) } }
+                }
+            }
+            .navigationTitle("Speak (eSpeak)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Speak") { onSpeak(); dismiss() } }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
