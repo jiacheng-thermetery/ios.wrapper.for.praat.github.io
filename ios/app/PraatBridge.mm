@@ -75,6 +75,26 @@ const char *praatios_run (const char *utf8script) {
 	return g_result.c_str ();
 }
 
+int praatios_objectCount (void) {
+	praatios_init ();
+	return (int) theCurrentPraatObjects -> n;
+}
+
+const char *praatios_objectInfo (int index) {
+	praatios_init ();
+	g_result.clear ();
+	if (index < 1 || index > theCurrentPraatObjects -> n) return "";
+	praat_Object obj = & theCurrentPraatObjects -> list [index];
+	char buf [64];
+	snprintf (buf, sizeof buf, "%lld|", (long long) obj -> id);
+	g_result = buf;
+	g_result += (const char *) Melder_peek32to8 (obj -> klas -> className);
+	g_result += "|";
+	g_result += (const char *) Melder_peek32to8 (obj -> name. get() ? obj -> name. get() : U"");
+	g_result += obj -> isSelected ? "|1" : "|0";
+	return g_result.c_str ();
+}
+
 int praatios_setSound (const float *samples, int count, double sampleRate) {
 	praatios_init ();
 	if (count <= 0 || sampleRate <= 0.0) return 0;

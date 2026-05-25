@@ -10,6 +10,12 @@ extern "C" {
 void praatios_init (void);
 const char *praatios_run (const char *utf8script);   /* runs a script, returns Info/error text */
 
+/* --- Objects window: enumerate the live object list ---
+ * Objects persist across praatios_run() calls (the engine's object table is global), so the
+ * Objects UI runs commands by generating `selectObject: <ids>` + the command through praatios_run. */
+int         praatios_objectCount (void);
+const char *praatios_objectInfo (int index1based);   /* "id|className|name|selected"; valid until next call */
+
 /* --- analysis: set the current Sound from mono float PCM --- */
 int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */

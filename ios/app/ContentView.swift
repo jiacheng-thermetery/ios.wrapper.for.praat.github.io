@@ -5,10 +5,12 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var showAbout = false
+    @State private var tab = 0
     var body: some View {
-        TabView {
-            AnalyzeView().tabItem { Label("Analyze", systemImage: "waveform") }
-            ScriptConsoleView().tabItem { Label("Script", systemImage: "terminal") }
+        TabView(selection: $tab) {
+            AnalyzeView().tabItem { Label("Analyze", systemImage: "waveform") }.tag(0)
+            ObjectsView().tabItem { Label("Objects", systemImage: "list.bullet") }.tag(1)
+            ScriptConsoleView().tabItem { Label("Script", systemImage: "terminal") }.tag(2)
         }
         .overlay(alignment: .topTrailing) {
             Button { showAbout = true } label: { Image(systemName: "info.circle") }

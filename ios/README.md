@@ -12,7 +12,10 @@ the full Praat scripting language, etc. — to iOS (arm64), with a small SwiftUI
 
 - The complete Praat **compute + scripting engine** is cross-compiled for iOS (all 14 Praat
   libraries + all 12 bundled `external/` libraries), verified running on the iOS 18.1 Simulator.
-- A SwiftUI app (`ios/app/`) with two tabs:
+- A SwiftUI app (`ios/app/`) with three tabs:
+  - **Objects** — a native Praat "Objects window": create (New) / open (any Praat file) objects, select them,
+    and run commands (a per-class palette or any typed command) through the live interpreter; results and new
+    objects appear in the list. This exposes the engine's ~3000 commands without writing full scripts.
   - **Analyze** — record from the microphone (AVAudioEngine), or load a demo sound, then see a live
     **spectrogram** with **pitch** (cyan), **formant** (red), and **intensity** (yellow) overlays —
     computed by Praat's real DSP (`Sound_to_Spectrogram_e`, `Sound_to_Pitch`, `Sound_to_Formant_burg`,
