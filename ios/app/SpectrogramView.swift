@@ -15,6 +15,8 @@ struct TimeRange: Equatable {
     var hi: Double { max(a, b) }
 }
 
+enum SpecDragMode { case none, moveCursor, resizeLo, resizeHi, newSelection }
+
 struct SpectrogramView: View {
     @ObservedObject var model: PraatModel
     @Binding var cursorTime: Double?
@@ -22,6 +24,7 @@ struct SpectrogramView: View {
     var showPitch: Bool
     var showFormants: Bool
     var showIntensity: Bool
+    @State private var dragMode: SpecDragMode = .none
 
     var body: some View {
         GeometryReader { geo in
@@ -42,18 +45,25 @@ struct SpectrogramView: View {
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
                     guard model.hasSound else { return }
-                    if abs(g.translation.width) > 6 {
-                        selection = TimeRange(a: timeAt(g.startLocation.x, W), b: timeAt(g.location.x, W))
+                    if dragMode == .none { dragMode = decideMode(startX: g.startLocation.x, W: W) }
+                    let t = timeAt(g.location.x, W)
+                    switch dragMode {
+                    case .moveCursor: cursorTime = t
+                    case .resizeLo: if let s = selection { selection = TimeRange(a: t, b: s.hi) }
+                    case .resizeHi: if let s = selection { selection = TimeRange(a: s.lo, b: t) }
+                    case .newSelection:
+                        if abs(g.translation.width) > 6 {
+                            selection = TimeRange(a: timeAt(g.startLocation.x, W), b: t); cursorTime = nil
+                        }
+                    case .none: break
                     }
                 }
                 .onEnded { g in
                     guard model.hasSound else { return }
-                    if abs(g.translation.width) <= 6 {
-                        cursorTime = timeAt(g.location.x, W); selection = nil
-                    } else {
-                        selection = TimeRange(a: timeAt(g.startLocation.x, W), b: timeAt(g.location.x, W))
-                        cursorTime = nil
+                    if dragMode == .newSelection && abs(g.translation.width) <= 6 {
+                        cursorTime = timeAt(g.location.x, W); selection = nil   // a tap = place cursor
                     }
+                    dragMode = .none
                 })
         }
     }
@@ -63,14 +73,31 @@ struct SpectrogramView: View {
     }
     private func xFor(time t: Double, _ W: Double) -> Double { W * (t - model.viewStart) / model.viewSpan }
 
+    private func decideMode(startX: Double, W: Double) -> SpecDragMode {
+        let grab = 18.0
+        if let s = selection {
+            if abs(startX - xFor(time: s.lo, W)) < grab { return .resizeLo }
+            if abs(startX - xFor(time: s.hi, W)) < grab { return .resizeHi }
+        }
+        if let c = cursorTime, c >= model.viewStart, c <= model.viewEnd,
+           abs(startX - xFor(time: c, W)) < grab { return .moveCursor }
+        return .newSelection
+    }
+
     private func draw(_ ctx: GraphicsContext, _ size: CGSize) {
         guard model.hasSound, model.viewEnd > model.viewStart else { return }
         let W = size.width, H = size.height
 
-        // selection highlight (drawn under the overlays)
+        // selection highlight + draggable edge handles (drawn under the overlays)
         if let s = selection {
             let x0 = xFor(time: s.lo, W), x1 = xFor(time: s.hi, W)
-            ctx.fill(Path(CGRect(x: x0, y: 0, width: x1 - x0, height: H)), with: .color(.pink.opacity(0.25)))
+            ctx.fill(Path(CGRect(x: x0, y: 0, width: x1 - x0, height: H)), with: .color(.pink.opacity(0.22)))
+            for x in [x0, x1] {
+                ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: H)) },
+                           with: .color(.pink), lineWidth: 1.5)
+                ctx.fill(Path(roundedRect: CGRect(x: x - 5, y: 2, width: 10, height: 18), cornerRadius: 3),
+                         with: .color(.pink))
+            }
         }
 
         // frequency gridlines + labels (every 1000 Hz)
@@ -101,11 +128,13 @@ struct SpectrogramView: View {
             }
         }
 
-        // time cursor
+        // time cursor + grab handle
         if let t = cursorTime, t >= model.viewStart, t <= model.viewEnd {
             let x = xFor(time: t, W)
             ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: H)) },
                        with: .color(.red), lineWidth: 1)
+            ctx.fill(Path(roundedRect: CGRect(x: x - 4, y: 2, width: 8, height: 14), cornerRadius: 2),
+                     with: .color(.red))
         }
     }
 

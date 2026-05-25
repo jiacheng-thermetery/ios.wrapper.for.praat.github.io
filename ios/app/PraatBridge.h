@@ -35,6 +35,10 @@ int praatios_curve (int kind, double tmin, double tmax, int n, float *out);
 /* min/max used to scale a curve in the UI (e.g. pitch floor/ceiling, intensity range). */
 void praatios_curveRange (int kind, double *outMin, double *outMax);
 
+/* Single analysis value at time t (NaN if undefined/unvoiced).
+ * kind: 0 = pitch (Hz), 1 = intensity (dB), 2..6 = formant 1..5 (Hz). */
+double praatios_valueAt (int kind, double t);
+
 /* --- spectral slice at time t (Cmd+L) ---
  * Returns a pointer to `*outN` floats: power density in dB vs frequency (0..outFmax).
  * Buffer owned by the bridge, valid until the next call. NULL if no sound. */

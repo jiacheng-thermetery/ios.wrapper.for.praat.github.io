@@ -98,6 +98,17 @@ final class PraatModel: ObservableObject {
         return AnalysisCurve(values: out, lo: lo, hi: hi)
     }
 
+    struct CursorValues {
+        var f0: Double?            // pitch, Hz
+        var formants: [Double?]    // F1..F4, Hz
+        var intensity: Double?     // dB
+    }
+
+    func valuesAt(_ t: Double) -> CursorValues {
+        func v(_ k: Int32) -> Double? { let x = praatios_valueAt(k, t); return x.isFinite ? x : nil }
+        return CursorValues(f0: v(0), formants: (2...5).map { v(Int32($0)) }, intensity: v(1))
+    }
+
     struct Slice { var db: [Float]; var fmax: Double; var dbMin: Double; var dbMax: Double }
 
     func spectrumSlice(at t: Double, windowDur: Double = 0.005) -> Slice? {

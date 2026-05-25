@@ -188,6 +188,22 @@ int praatios_curve (int kind, double tmin, double tmax, int n, float *out) {
 	return 1;
 }
 
+double praatios_valueAt (int kind, double t) {
+	if (! theSound. get()) return NAN;
+	double v = undefined;
+	if (kind == 0) {
+		ensurePitch (); if (! thePitch. get()) return NAN;
+		v = Pitch_getValueAtTime (thePitch.get(), t, kPitch_unit::HERTZ, true);
+	} else if (kind == 1) {
+		ensureIntensity (); if (! theIntensity. get()) return NAN;
+		v = Vector_getValueAtX (theIntensity.get(), t, 1, kVector_valueInterpolation::LINEAR);
+	} else if (kind >= 2 && kind <= 6) {
+		ensureFormant (); if (! theFormant. get()) return NAN;
+		v = Formant_getValueAtTime (theFormant.get(), kind - 1, t, kFormant_unit::HERTZ);
+	}
+	return isdefined (v) ? v : NAN;
+}
+
 void praatios_curveRange (int kind, double *outMin, double *outMax) {
 	if (kind == 0)      { *outMin = kPitchFloor;  *outMax = kPitchCeiling; }
 	else if (kind == 1) { *outMin = 50.0;         *outMax = 100.0; }

@@ -31,6 +31,12 @@ struct AnalyzeView: View {
     @State private var annotations: [Annotation] = []
     @State private var selectedAnnotation: UUID?
     @State private var zoomHistory: [TimeRange] = []
+    @State private var cursorValues: PraatModel.CursorValues?
+
+    @State private var showZoomDialog = false
+    @State private var showPlayDialog = false
+    @State private var dlgFrom = ""
+    @State private var dlgTo = ""
 
     @State private var showPitch = true
     @State private var showFormants = true
@@ -47,6 +53,7 @@ struct AnalyzeView: View {
                                 showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
                     .frame(minHeight: 190)
                 timeAxis
+                if let cv = cursorValues { cursorReadout(cv) }
                 AnnotationTierView(annotations: $annotations, selected: $selectedAnnotation,
                                    viewStart: model.viewStart, viewEnd: model.viewEnd, duration: model.duration)
                     .frame(height: 38)
@@ -61,7 +68,20 @@ struct AnalyzeView: View {
             }
         }
         .padding(8)
-        .onChange(of: cursorTime) { _, t in slice = (t != nil) ? model.spectrumSlice(at: t!) : nil }
+        .onChange(of: cursorTime) { _, t in
+            if let t { slice = model.spectrumSlice(at: t); cursorValues = model.valuesAt(t) }
+            else { slice = nil; cursorValues = nil }
+        }
+        .sheet(isPresented: $showZoomDialog) {
+            TimeRangeDialog(title: "Zoom", actionLabel: "Zoom", from: $dlgFrom, to: $dlgTo) { a, b in
+                pushZoom(); model.setView(a, b)
+            }
+        }
+        .sheet(isPresented: $showPlayDialog) {
+            TimeRangeDialog(title: "Play", actionLabel: "Play", from: $dlgFrom, to: $dlgTo) { a, b in
+                audio.play(samples, rate: rate, from: a, to: b)
+            }
+        }
         .onAppear {
             if !model.hasSound {
                 loadDemo()
@@ -91,6 +111,7 @@ struct AnalyzeView: View {
 
     private var timeMenu: some View {
         Menu {
+            Button("Zoom...") { dlgFrom = fmt(model.viewStart); dlgTo = fmt(model.viewEnd); showZoomDialog = true }
             Button("Show all") { showAll() }.keyboardShortcut("a")
             Button("Zoom in") { zoomIn() }.keyboardShortcut("i")
             Button("Zoom out") { zoomOut() }.keyboardShortcut("o")
@@ -104,6 +125,10 @@ struct AnalyzeView: View {
 
     private var audioMenu: some View {
         Menu {
+            Button("Play...") {
+                let r = selection ?? TimeRange(a: model.viewStart, b: model.viewEnd)
+                dlgFrom = fmt(r.lo); dlgTo = fmt(r.hi); showPlayDialog = true
+            }
             Button(audio.isPlaying ? "Stop" : "Play window") { playOrStop() }.keyboardShortcut(.space, modifiers: [])
             Button("Play selection") { playSelection() }.disabled(selection == nil)
             Button("Interrupt playing") { audio.stopPlayback() }.disabled(!audio.isPlaying)
@@ -210,6 +235,62 @@ struct AnalyzeView: View {
     }
     private func playOrStop() { if audio.isPlaying { audio.stopPlayback() } else { audio.play(samples, rate: rate, from: model.viewStart, to: model.viewEnd) } }
     private func playSelection() { if let s = selection { audio.play(samples, rate: rate, from: s.lo, to: s.hi) } }
+
+    private func fmt(_ x: Double) -> String { String(format: "%.3f", x) }
+
+    // read-out of analysis values at the cursor (like Praat's editor)
+    @ViewBuilder private func cursorReadout(_ v: PraatModel.CursorValues) -> some View {
+        HStack(spacing: 12) {
+            chip("F0", v.f0, "Hz", .cyan)
+            ForEach(Array(v.formants.enumerated()), id: \.offset) { i, f in chip("F\(i + 1)", f, "", .red) }
+            chip("Int", v.intensity, "dB", .orange)
+            Spacer()
+        }
+        .font(.system(.caption2, design: .monospaced))
+        .padding(.vertical, 2)
+    }
+    private func chip(_ name: String, _ val: Double?, _ unit: String, _ color: Color) -> some View {
+        HStack(spacing: 3) {
+            Text(name).foregroundStyle(color).bold()
+            Text(val != nil ? String(format: "%.0f", val!) + (unit.isEmpty ? "" : " " + unit) : "—")
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
+// MARK: - From/to time entry dialog (Zoom… / Play…)
+
+struct TimeRangeDialog: View {
+    let title: String
+    let actionLabel: String
+    @Binding var from: String
+    @Binding var to: String
+    var onCommit: (Double, Double) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                LabeledContent("From (s)") {
+                    TextField("from", text: $from).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+                LabeledContent("To (s)") {
+                    TextField("to", text: $to).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(actionLabel) {
+                        if let a = Double(from), let b = Double(to), b > a { onCommit(a, b) }
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(230)])
+    }
 }
 
 // MARK: - Script console
