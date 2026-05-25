@@ -190,7 +190,10 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
 6. **Shared tier editor + full TextGrid editor (T3)** — *TextGrid editor done* (multi interval/point
    tiers, boundaries at cursor, labels, `.TextGrid` export). *Still open:* the shared **curve** tier
    editor (drag Pitch/Intensity/Duration points).
-7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — flagship native editors.
+7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — *Vowel editor done*
+   (drag F1×F2 → formant-synth playback, IPA reference vowels, F0 slider). *Still open:* the
+   **Manipulation/PSOLA** editor (pitch+duration tiers with resynthesis) and the **ExperimentMFC**
+   perception-experiment runner — the two largest remaining native editors.
 
 Items 1–3 and 5 are bounded and expose the vast majority of Praat's value; 4 is the big multiplier for
 visualisation; 6–7 are the marquee interactive editors.
