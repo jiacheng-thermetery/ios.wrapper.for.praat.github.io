@@ -24,9 +24,13 @@ int    praatios_waveform (double t0, double t1, int n, float *outMin, float *out
  * iy=0 is the lowest frequency). The buffer is owned by the bridge and valid until the
  * next call. NULL if no sound or the window is too small. */
 const float *praatios_spectrogram (double t0, double t1, double maxFreq, double windowLength,
-        int *outNx, int *outNy,
+        double dynamicRange, int *outNx, int *outNy,
         double *outTmin, double *outTmax, double *outFmax,
         double *outDbMin, double *outDbMax);
+
+/* --- analysis parameters (re-run analyses when changed) --- */
+void praatios_setPitchRange (double floor, double ceiling);
+void praatios_setFormantParams (double maxFreq, int numFormants, double windowLength);
 
 /* --- analysis curves sampled over [tmin,tmax] into out[0..n-1] (NaN where undefined) ---
  * kind: 0 = pitch (Hz), 1 = intensity (dB), 2..6 = formant 1..5 (Hz). */

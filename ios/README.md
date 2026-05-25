@@ -24,6 +24,10 @@ the full Praat scripting language, etc. — to iOS (arm64), with a small SwiftUI
     Zoom in/out (⌘I/⌘O), Zoom to selection (⌘N), Zoom back (⌘B), Scroll page back/forward (↑/↓) — and
     zooming **re-analyses the visible window** so detail increases as you zoom in. An **Audio** menu
     plays the window, the selection, or a numeric range (Play…), and stops/interrupts playback.
+    A **gear** button opens **Analysis settings** mirroring Praat's settings dialogs (spectrogram view
+    range / window length / dynamic range; pitch floor & ceiling; formant max-frequency, number and
+    window length; intensity view range) — changing them re-runs the analyses. An **Open** button loads
+    an audio file (WAV/AIFF/CAF/m4a/mp3) from phone storage via the Files picker.
   - **Script** — type a Praat script, tap Run, see the Info-window output.
 - A headless CLI (`ios/praat_barren_ios`) runs `--run script.praat` under `simctl spawn`.
 

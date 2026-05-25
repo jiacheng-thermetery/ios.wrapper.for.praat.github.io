@@ -37,10 +37,10 @@ static std::string g_result;
 static std::vector<float> g_spectro;
 static std::vector<float> g_slice;
 
-/* analysis parameters (Praat-like defaults) */
-static const double kPitchFloor = 75.0, kPitchCeiling = 600.0;
-static const double kMaxFormantFreq = 5500.0;
-static const int    kNumFormants = 5;
+/* analysis parameters (Praat-like defaults), settable from Swift */
+static double gPitchFloor = 75.0, gPitchCeiling = 600.0;
+static double gFormantMaxFreq = 5500.0, gFormantWindow = 0.025, gFormantPreemph = 50.0;
+static int    gNumFormants = 5;
 
 void praatios_init (void) {
 	static bool inited = false;
@@ -127,7 +127,7 @@ int praatios_waveform (double t0, double t1, int n, float *outMin, float *outMax
 }
 
 const float *praatios_spectrogram (double t0, double t1, double maxFreq, double windowLength,
-		int *outNx, int *outNy, double *outTmin, double *outTmax, double *outFmax,
+		double dynamicRange, int *outNx, int *outNy, double *outTmin, double *outTmax, double *outFmax,
 		double *outDbMin, double *outDbMax) {
 	if (! theSound. get()) return nullptr;
 	if (t1 - t0 < 3.0 * windowLength) return nullptr;   // window too small to analyse
@@ -149,7 +149,6 @@ const float *praatios_spectrogram (double t0, double t1, double maxFreq, double 
 			g_spectro [(size_t) (iy - 1) * nx + (ix - 1)] = (float) db;
 			if (db > dbMax) dbMax = db;
 		}
-	const double dynamicRange = 70.0;   // Praat default
 	*outNx = (int) nx; *outNy = (int) ny;
 	*outTmin = s -> xmin; *outTmax = s -> xmax;
 	*outFmax = s -> ymax;
@@ -157,9 +156,21 @@ const float *praatios_spectrogram (double t0, double t1, double maxFreq, double 
 	return g_spectro.data();
 }
 
-static void ensurePitch ()     { if (! thePitch. get())     { try { thePitch = Sound_to_Pitch (theSound.get(), 0.0, kPitchFloor, kPitchCeiling); } catch (MelderError) { Melder_clearError (); } } }
-static void ensureFormant ()   { if (! theFormant. get())   { try { theFormant = Sound_to_Formant_burg (theSound.get(), 0.0, kNumFormants, kMaxFormantFreq, 0.025, 50.0); } catch (MelderError) { Melder_clearError (); } } }
-static void ensureIntensity () { if (! theIntensity. get()) { try { theIntensity = Sound_to_Intensity (theSound.get(), kPitchFloor, 0.0, true); } catch (MelderError) { Melder_clearError (); } } }
+static void ensurePitch ()     { if (! thePitch. get())     { try { thePitch = Sound_to_Pitch (theSound.get(), 0.0, gPitchFloor, gPitchCeiling); } catch (MelderError) { Melder_clearError (); } } }
+static void ensureFormant ()   { if (! theFormant. get())   { try { theFormant = Sound_to_Formant_burg (theSound.get(), 0.0, gNumFormants, gFormantMaxFreq, gFormantWindow, gFormantPreemph); } catch (MelderError) { Melder_clearError (); } } }
+static void ensureIntensity () { if (! theIntensity. get()) { try { theIntensity = Sound_to_Intensity (theSound.get(), gPitchFloor, 0.0, true); } catch (MelderError) { Melder_clearError (); } } }
+
+void praatios_setPitchRange (double floor, double ceiling) {
+	if (floor > 0 && ceiling > floor) { gPitchFloor = floor; gPitchCeiling = ceiling; }
+	thePitch = autoPitch();
+	theIntensity = autoIntensity();   // intensity analysis uses the pitch floor as its minimum pitch
+}
+void praatios_setFormantParams (double maxFreq, int numFormants, double windowLength) {
+	if (maxFreq > 0) gFormantMaxFreq = maxFreq;
+	if (numFormants >= 1 && numFormants <= 5) gNumFormants = numFormants;
+	if (windowLength > 0) gFormantWindow = windowLength;
+	theFormant = autoFormant();
+}
 
 int praatios_curve (int kind, double tmin, double tmax, int n, float *out) {
 	if (! theSound. get() || n <= 0) return 0;
@@ -205,9 +216,9 @@ double praatios_valueAt (int kind, double t) {
 }
 
 void praatios_curveRange (int kind, double *outMin, double *outMax) {
-	if (kind == 0)      { *outMin = kPitchFloor;  *outMax = kPitchCeiling; }
+	if (kind == 0)      { *outMin = gPitchFloor;  *outMax = gPitchCeiling; }
 	else if (kind == 1) { *outMin = 50.0;         *outMax = 100.0; }
-	else                { *outMin = 0.0;          *outMax = kMaxFormantFreq; }
+	else                { *outMin = 0.0;          *outMax = gFormantMaxFreq; }
 }
 
 const float *praatios_spectrumSlice (double t, double windowDur,

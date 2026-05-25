@@ -95,6 +95,41 @@ final class AudioEngine: ObservableObject {
     }
 }
 
+extension AudioEngine {
+    /// Write mono Float PCM to a WAV file (used for export and for self-testing decode()).
+    @discardableResult
+    static func writeWav(_ samples: [Float], rate: Double, to url: URL) -> Bool {
+        guard let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate,
+                                      channels: 1, interleaved: false),
+              let file = try? AVAudioFile(forWriting: url, settings: fmt.settings),
+              let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(samples.count))
+        else { return false }
+        buf.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { memcpy(buf.floatChannelData![0], $0.baseAddress, samples.count * 4) }
+        return (try? file.write(from: buf)) != nil
+    }
+
+    /// Decode an audio file (WAV/AIFF/CAF/m4a/mp3/…) from storage to mono Float PCM + sample rate.
+    static func decode(url: URL) -> ([Float], Double)? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let file = try? AVAudioFile(forReading: url) else { return nil }
+        let fmt = file.processingFormat   // float32, deinterleaved
+        guard file.length > 0,
+              let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: buf)) != nil,
+              let chans = buf.floatChannelData else { return nil }
+        let frames = Int(buf.frameLength), nch = max(Int(fmt.channelCount), 1)
+        var mono = [Float](repeating: 0, count: frames)
+        for f in 0..<frames {
+            var s: Float = 0
+            for c in 0..<nch { s += chans[c][f] }
+            mono[f] = s / Float(nch)
+        }
+        return (mono, fmt.sampleRate)
+    }
+}
+
 /// A synthesized "vowel-like" sound (sum of damped formant resonances modulated at f0)
 /// so the spectrogram/analyses can be demonstrated without microphone input.
 enum DemoSound {

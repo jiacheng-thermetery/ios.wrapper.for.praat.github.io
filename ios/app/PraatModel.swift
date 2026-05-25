@@ -4,9 +4,22 @@ import SwiftUI
 import CoreGraphics
 
 struct AnalysisCurve {
-    var values: [Float] = []          // sampled over [0, duration]; NaN where undefined
+    var values: [Float] = []          // sampled over the view window; NaN where undefined
     var lo: Double = 0
     var hi: Double = 1
+}
+
+struct AnalysisSettings: Equatable {
+    var spectrogramMaxFreq: Double = 5000     // view range (Hz)
+    var spectrogramWindow: Double = 0.005     // window length (s) — broadband
+    var spectrogramDynamicRange: Double = 70  // dB
+    var pitchFloor: Double = 75
+    var pitchCeiling: Double = 600
+    var formantMaxFreq: Double = 5500
+    var formantCount: Int = 5
+    var formantWindow: Double = 0.025
+    var intensityMin: Double = 50             // view range (dB)
+    var intensityMax: Double = 100
 }
 
 @MainActor
@@ -32,11 +45,18 @@ final class PraatModel: ObservableObject {
     @Published var intensity = AnalysisCurve(lo: 50, hi: 100)
     @Published var formants: [AnalysisCurve] = []   // F1..F4
 
-    // analysis settings (Praat-like)
-    var maxFreqSetting: Double = 5000
-    var windowLength: Double = 0.005     // broadband
+    @Published var settings = AnalysisSettings()
     let curveSamples = 500
     let waveSamples = 1000
+
+    /// Apply new analysis settings: push the computational ones to the engine
+    /// (re-running cached analyses) and redraw.
+    func applySettings(_ s: AnalysisSettings) {
+        settings = s
+        praatios_setPitchRange(s.pitchFloor, s.pitchCeiling)
+        praatios_setFormantParams(s.formantMaxFreq, Int32(s.formantCount), s.formantWindow)
+        if hasSound { recompute() }
+    }
 
     func setSamples(_ samples: [Float], rate: Double) {
         guard !samples.isEmpty else { return }
@@ -54,7 +74,7 @@ final class PraatModel: ObservableObject {
     /// Set the visible window (clamped) and re-analyse it.
     func setView(_ a: Double, _ b: Double) {
         guard hasSound, duration > 0 else { return }
-        let minSpan = 3.0 * windowLength
+        let minSpan = 3.0 * settings.spectrogramWindow
         var lo = max(0, min(a, duration))
         var hi = min(duration, max(b, lo + minSpan))
         if hi - lo < minSpan { lo = max(0, hi - minSpan) }
@@ -77,7 +97,8 @@ final class PraatModel: ObservableObject {
 
         var nx: Int32 = 0, ny: Int32 = 0
         var t0 = 0.0, t1 = 0.0, fm = 0.0, dmin = 0.0, dmax = 0.0
-        if let ptr = praatios_spectrogram(viewStart, viewEnd, maxFreqSetting, windowLength,
+        if let ptr = praatios_spectrogram(viewStart, viewEnd, settings.spectrogramMaxFreq,
+                settings.spectrogramWindow, settings.spectrogramDynamicRange,
                 &nx, &ny, &t0, &t1, &fm, &dmin, &dmax), nx > 0, ny > 0 {
             fmax = fm; dbMin = dmin; dbMax = dmax
             spectrogram = Self.makeGrayImage(ptr, Int(nx), Int(ny), dmin, dmax)
@@ -89,8 +110,12 @@ final class PraatModel: ObservableObject {
     }
 
     private func curve(_ kind: Int32) -> AnalysisCurve {
-        var lo = 0.0, hi = 1.0
-        praatios_curveRange(kind, &lo, &hi)
+        let lo: Double, hi: Double
+        switch kind {
+        case 0:  lo = settings.pitchFloor;   hi = settings.pitchCeiling      // pitch (Hz)
+        case 1:  lo = settings.intensityMin; hi = settings.intensityMax      // intensity (dB)
+        default: lo = 0;                     hi = settings.formantMaxFreq    // formants (Hz)
+        }
         var out = [Float](repeating: .nan, count: curveSamples)
         out.withUnsafeMutableBufferPointer {
             _ = praatios_curve(kind, viewStart, viewEnd, Int32(curveSamples), $0.baseAddress)

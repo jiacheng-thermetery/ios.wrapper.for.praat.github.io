@@ -1,6 +1,7 @@
 // ContentView.swift — Spraak UI: Analyze (spectrogram editor) + Script console.
 // GPL-3.0-or-later. UNOFFICIAL modified version of Praat.
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var showAbout = false
@@ -37,6 +38,9 @@ struct AnalyzeView: View {
     @State private var showPlayDialog = false
     @State private var dlgFrom = ""
     @State private var dlgTo = ""
+    @State private var settings = AnalysisSettings()
+    @State private var showSettings = false
+    @State private var showImporter = false
 
     @State private var showPitch = true
     @State private var showFormants = true
@@ -82,6 +86,12 @@ struct AnalyzeView: View {
                 audio.play(samples, rate: rate, from: a, to: b)
             }
         }
+        .sheet(isPresented: $showSettings) {
+            AnalysisSettingsView(settings: $settings) { model.applySettings(settings) }
+        }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio]) { result in
+            if case .success(let url) = result { openFile(url) }
+        }
         .onAppear {
             if !model.hasSound {
                 loadDemo()
@@ -93,18 +103,21 @@ struct AnalyzeView: View {
     // MARK: controls
 
     private var topControls: some View {
-        HStack(spacing: 8) {
-            Button { record() } label: {
-                Label(audio.isRecording ? "Stop" : "Record",
-                      systemImage: audio.isRecording ? "stop.circle.fill" : "record.circle")
-                    .foregroundStyle(audio.isRecording ? .red : .primary)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button { record() } label: {
+                    Label(audio.isRecording ? "Stop" : "Record",
+                          systemImage: audio.isRecording ? "stop.circle.fill" : "record.circle")
+                        .foregroundStyle(audio.isRecording ? .red : .primary)
+                }
+                Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
+                Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
+                timeMenu
+                audioMenu
+                Button { settings = model.settings; showSettings = true } label: { Image(systemName: "gearshape") }
+                if audio.permissionDenied { Text("Mic denied").font(.caption2).foregroundStyle(.red) }
             }
-            Button { loadDemo() } label: { Label("Demo", systemImage: "play.rectangle") }
-
-            timeMenu
-            audioMenu
-            Spacer()
-            if audio.permissionDenied { Text("Mic denied").font(.caption2).foregroundStyle(.red) }
+            .padding(.trailing, 28)
         }
         .buttonStyle(.bordered).controlSize(.small).font(.callout)
     }
@@ -212,6 +225,10 @@ struct AnalyzeView: View {
     }
     private func loadDemo() {
         let (s, r) = DemoSound.vowel(); samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+    }
+    private func openFile(_ url: URL) {
+        guard let (s, r) = AudioEngine.decode(url: url) else { return }
+        samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
     }
     private func resetAnalysis() {
         cursorTime = nil; selection = nil; slice = nil; annotations = []; selectedAnnotation = nil; zoomHistory = []
