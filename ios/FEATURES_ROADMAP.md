@@ -79,14 +79,16 @@ Categories, Corpus, FileInMemory, etc.
 **iOS approach:** these are just parameterised commands → render via the **form generator (T4)** in the
 Objects window. No new engine code. Effort: comes "for free" once T1+T4 exist; until then, scriptable.
 
-## 5. Open / Save — file I/O & formats  — *T1, partly done*
+## 5. Open / Save — file I/O & formats  — *T1, done*
 
-- **Open (done, partial):** audio via `.fileImporter` + `AVAudioFile`. **To generalise:** route any picked
-  file through `Data_readFromFile` (auto-detects Praat's own formats, TextGrid, Table, Matrix, …) and add
-  the format-specific readers (raw 16-bit, A-law, Buckeye/TIMIT/Xwaves/ESPS annotation, CSV/TSV tables, …).
-- **Save (todo):** write the selected object to the Files app — `Save as WAV/AIFF/FLAC/MP3` for Sound,
-  `Data_writeToTextFile`/binary for everything, CSV for Table, `.TextGrid` for TextGrid, PNG/PDF for Picture.
-  Use a `.fileExporter`/`UIDocumentPicker`. **Effort:** small–medium; all writers exist in the engine.
+- **Open (done):** the Objects window's **Open** routes any picked file through `Data_readFromFile`
+  (auto-detects Praat's own formats, TextGrid, Table, Matrix, …); the Analyze view opens audio via
+  `.fileImporter` + `AVAudioFile`. *Long tail (optional):* extra readers (raw 16-bit, A-law,
+  Buckeye/TIMIT/Xwaves/ESPS annotation, CSV/TSV variants).
+- **Save (done):** the Objects window's **Save** writes the selected object — `Save as WAV file` for Sound,
+  `Save as text file` for everything else — to a temp file and hands it to the system share sheet
+  (`UIActivityViewController`) so it lands in Files/AirDrop/etc. PNG/PDF export of drawings goes through the
+  same path. All writers are the engine's own.
 
 ## 6. Object-action commands by class group  — *T1 (+ T2 for the Draw… ones)*
 
@@ -205,6 +207,8 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
    user-opened `.MFCexperiment`; response buttons laid out from the actual `ResponseMFC` rectangles;
    records responses/reaction-times; exports CSV).
 
-All 14 sections of this roadmap are now exposed natively in the wrapper. Items 1–3 and 5 were bounded and
-expose the vast majority of Praat's value; 4 is the big multiplier for visualisation; 6–7 are the marquee
-interactive editors.
+**All seven items of this prioritised plan are now implemented and verified on the simulator.** Items 1–3
+and 5 were bounded and expose the vast majority of Praat's value; 4 is the big multiplier for
+visualisation; 6–7 are the marquee interactive editors. What remains is the explicitly-niche long tail
+catalogued in §9 (KlattGrid / OT-grammar / Table-Matrix-Strings grid editors and a full Spectrum band
+editor) — none are blockers, and every one is already usable through the Script tab today.
