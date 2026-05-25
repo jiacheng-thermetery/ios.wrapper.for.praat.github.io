@@ -12,17 +12,26 @@ the full Praat scripting language, etc. — to iOS (arm64), with a small SwiftUI
 
 - The complete Praat **compute + scripting engine** is cross-compiled for iOS (all 14 Praat
   libraries + all 12 bundled `external/` libraries), verified running on the iOS 18.1 Simulator.
-- A SwiftUI app (`ios/app/`) embeds the engine: type a Praat script, tap **Run**, see the
-  Info-window output. Pitch/spectrum/intensity analysis all run natively on device.
+- A SwiftUI app (`ios/app/`) with two tabs:
+  - **Analyze** — record from the microphone (AVAudioEngine), or load a demo sound, then see a live
+    **spectrogram** with **pitch** (cyan), **formant** (red), and **intensity** (yellow) overlays —
+    computed by Praat's real DSP (`Sound_to_Spectrogram_e`, `Sound_to_Pitch`, `Sound_to_Formant_burg`,
+    `Sound_to_Intensity`). Drag to place a time cursor and read the **spectral slice** at that point
+    (Praat's Cmd+L). A **TextGrid-style annotation tier** lets you place interval boundaries and type
+    labels. Play back the sound.
+  - **Script** — type a Praat script, tap Run, see the Info-window output.
 - A headless CLI (`ios/praat_barren_ios`) runs `--run script.praat` under `simctl spawn`.
 
-## Not yet ported (stubbed, documented in PORTING_NOTES.md)
+Praat does the numbers; SwiftUI does the drawing (the bridge in `ios/app/PraatBridge.mm` returns the
+spectrogram dB matrix and the analysis arrays, which `PraatModel.swift` renders as a `CGImage` + Canvas
+overlays). This native-rendering approach sidesteps Praat's macOS-only Cocoa Graphics backend.
 
-- **Audio** playback/recording — Praat's PortAudio/CoreAudio path is macOS-only; iOS should use
-  AVAudioEngine from the app shell (the engine links a no-backend PortAudio so it builds & runs).
-- **Graphics rendering** — the Picture window / spectrogram drawing (the macOS path uses
-  CoreGraphics, which *is* available on iOS, so this is a tractable next step).
-- The interactive Cocoa editors (SoundEditor, etc.) — to be replaced by native SwiftUI editors.
+## Not yet ported
+
+- **Full Picture window** vector graphics (EPS/PDF drawing commands) — only the Sound-editor-style
+  spectrogram view is rendered so far.
+- The interactive **Cocoa editors** (SoundEditor, TextGridEditor, …) — replaced by the native SwiftUI
+  Analyze view rather than ported.
 
 ## Build & run
 
@@ -67,6 +76,11 @@ repository at the commit you built, including `ios/`. The full license text is i
 | `link-barren.sh` | link the headless `praat_barren_ios` engine |
 | `pa_ios_hostapis.c` | empty PortAudio host-API table for iOS |
 | `selftest.praat` | phonetics self-test script |
-| `app/` | the SwiftUI app + C bridge + `build-app.sh` |
+| `app/PraatBridge.{h,mm}` | C bridge: script runner + analysis data extraction (spectrogram/pitch/formant/intensity/slice) |
+| `app/PraatModel.swift` | Swift model; builds the spectrogram `CGImage` and analysis curves |
+| `app/AudioEngine.swift` | AVAudioEngine mic recording + playback (+ demo sound synth) |
+| `app/SpectrogramView.swift` | spectrogram + overlays, annotation tier, spectral-slice views |
+| `app/ContentView.swift` | Analyze + Script tabs, About/license screen |
+| `app/build-app.sh` | compile + bundle + install + launch the app on a simulator |
 | `LICENSING.md` | license audit + GPL compliance plan |
 | `PORTING_NOTES.md` | every source change made for the port |

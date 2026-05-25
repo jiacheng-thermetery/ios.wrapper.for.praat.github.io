@@ -65,6 +65,18 @@ guard edits, which were applied by anchored `sed` and are listed below).
   `Str255`) with `! defined (PRAAT_IOS)`. The recorder compiles as a no-backend stub; real recording will
   be provided by the app shell via AVAudioEngine. *(applied by sed)*
 
+## App-layer analysis (spectrogram, overlays, slice, annotation)
+
+The SwiftUI app's analysis features (microphone recording, spectrogram rendering, pitch/formant/
+intensity overlays, spectral slice, TextGrid-style annotation) are implemented **entirely in the
+app layer** (`ios/app/`) on top of Praat's existing **public API** — `Sound_create`,
+`Sound_to_Spectrogram_e`, `Sound_to_Pitch`, `Sound_to_Formant_burg`, `Sound_to_Intensity`,
+`Sound_extractPart` + `Sound_to_Spectrum`, `Pitch/Formant_getValueAtTime`, `Vector_getValueAtX`.
+**No upstream Praat source files were modified for these features.** The C bridge returns the
+spectrogram dB matrix and analysis arrays; SwiftUI draws them (a `CGImage` + `Canvas` overlays),
+which avoids Praat's macOS-only Cocoa Graphics backend. Audio uses AVAudioEngine, not Praat's
+macOS-only PortAudio/CoreAudio path (PortAudio is linked backend-less; see `pa_ios_hostapis.c`).
+
 ## Build
 
 ```sh
