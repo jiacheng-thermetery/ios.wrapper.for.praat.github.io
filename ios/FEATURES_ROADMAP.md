@@ -39,12 +39,16 @@ Every Praat feature maps to one of these, in rough order of leverage:
 ## 2. What the wrapper exposes today
 
 - **Engine + scripting:** full Praat scripting language (Script tab) — *all* analysis/synthesis/stats.
-- **Sound editor (native, partial):** record (mic) / open file / demo; spectrogram with pitch, formant and
+- **Sound editor (native):** record (mic) / open file / demo; spectrogram with pitch, formant and
   intensity overlays; movable cursor + draggable selection; spectral slice (Cmd+L); zoom/scroll/selection
   (Time menu); play window/selection (Audio menu); cursor value read-outs; analysis settings
-  (spectrogram/pitch/formant/intensity); a basic TextGrid-style annotation tier.
+  (spectrogram/pitch/formant/intensity); multi-tier TextGrid annotation with `.TextGrid` export.
+- **Objects window (native):** live object list with New / Open / Save / Rename / Remove, class-aware
+  command palette + generic form renderer, and a **Draw** button that renders via Praat's Quartz Graphics.
+- **Speak (eSpeak TTS), Vowel editor (F1×F2 formant synth), Manipulation/PSOLA pitch editor, and the
+  ExperimentMFC perception-experiment runner** are all exposed as native tabs/views.
 
-Everything below is **not yet exposed natively** (but is scriptable today).
+Everything else below is **not yet exposed natively** (but is scriptable today).
 
 ## 3. Objects window & the object system  — *T1, highest priority*
 
@@ -125,15 +129,15 @@ line per command (trivial).
 
 | Editor | Status | iOS approach |
 |---|---|---|
-| Sound / LongSound | **partial (native)** | extend current Analyze view (pulses, intensity/formant listings, extract, save) |
-| TextGrid | **partial** (1 tier) | multi-tier interval/point editor, IPA keyboard, boundaries snap to cursor |
-| Manipulation (PSOLA) | todo | pitch-tier + duration-tier editing over the sound; resynthesis playback |
-| Pitch / PitchTier | todo | native curve editor (drag points) |
-| Spectrum / Spectrogram | todo | Spectrum slice already done; full Spectrum editor = band view |
-| FormantGrid / FormantPath | todo | formant-track editor (drag) |
-| Intensity/Amplitude/Duration/RealTier | todo | shared "tier editor" component (drag points on a curve) |
+| Sound / LongSound | **done (native)** | Analyze view: spectrogram + overlays, cursor/selection, slice, settings |
+| TextGrid | **done** | multi-tier interval/point editor, boundaries at cursor, labels, `.TextGrid` export |
+| Manipulation (PSOLA) | **done** | drag the pitch tier (`TierCurveView`) → overlap-add resynthesis playback |
+| Pitch / PitchTier | **component done** | reusable `TierCurveView` drag editor (wire to a PitchTier object) |
+| Spectrum / Spectrogram | partial | Spectrum slice done; full Spectrum editor (band view) still open |
+| FormantGrid / FormantPath | **component done** | reuse `TierCurveView` per formant track |
+| Intensity/Amplitude/Duration/RealTier | **component done** | shared `TierCurveView` (drag points on a curve) |
 | KlattGrid | todo | synthesizer parameter editor (many tiers) — niche |
-| Artword / Vowel | todo | articulatory synthesis editors — niche, but the **Vowel editor** (drag F1×F2 → hear a vowel) is a fun, tractable native build |
+| Artword / Vowel | **Vowel done** | Vowel editor (drag F1×F2 → formant-synth playback, IPA refs, F0); Artword niche |
 | OTGrammar / OTMulti | todo | constraint-ranking table + tableau view |
 | Table / Matrix / Strings / Categories | todo | grid/list editors (SwiftUI `Table`) |
 | Script / Notebook | **partial** | the Script tab is a minimal ScriptEditor; add open/save, run-selection |
@@ -153,9 +157,10 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
 - **Script editor (partial):** add open/save script files, run-selection, a command palette. T0/T3.
 - **Demo window** (`demo …` commands): a scriptable full-screen draw+click surface — maps to a SwiftUI
   `Canvas` driven by the Demo Graphics (needs **T2**). Powering point: enables interactive teaching demos.
-- **ExperimentMFC** (listening/perception experiments): runs `.MFC` experiments (play stimuli, collect
-  responses). Very valuable for phoneticians; a native runner over the existing `ExperimentMFC` engine
-  is a self-contained T3 project.
+- **ExperimentMFC** (listening/perception experiments): **done.** A native runner over the real
+  `ExperimentMFC` engine — built-in tone-height demo (synthesised stimuli, `PermuteBalanced` order) plus
+  `Run selected` for a user-opened `.MFCexperiment`; response buttons from the actual `ResponseMFC`
+  rectangles; records responses + reaction times; exports CSV.
 - **Buttons/preferences, menu commands, add-to-dynamic-menu:** desktop-customisation; low priority on iOS.
 
 ## 12. ASR
@@ -173,9 +178,12 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
 
 ## 14. Prioritised implementation plan
 
-1. **Objects window + command runner (T1)** — the keystone; turns the app into Praat. *(starting now)*
-2. **Open-any-file + Save/export (T1)** — `Data_readFromFile` for any type; `.fileExporter` for Sound/TextGrid/Table/Data.
-3. **Generic form renderer (T4)** — makes "…" commands and the whole **New** menu usable.
+1. **Objects window + command runner (T1)** — **done.** Native object list (New/Open/Save/Rename/Remove)
+   driving the engine's global object table via generated `selectObject:` + command scripts.
+2. **Open-any-file + Save/export (T1)** — **done.** `Data_readFromFile` for any type via `.fileImporter`;
+   Save/export through `ShareLink`/`UIActivityViewController`.
+3. **Generic form renderer (T4)** — **done.** `CommandFormView` turns a `CmdSpec` into a form and emits the
+   script line, covering "…" commands and the **New** menu.
 4. **CoreGraphics Graphics backend + Picture tab (T2)** — **done.** The Praat **Quartz** Graphics backend
    (CGContext/CoreText/ImageIO) is now compiled for iOS via a `PRAAT_IOS_GRAPHICS` switch in `GraphicsP.h`
    (quartz=1 even under `NO_GRAPHICS`), with the ~23 AppKit/screen touchpoints (`d_macView`,
@@ -184,14 +192,19 @@ Shared insight: most tier editors (Pitch/Intensity/Duration/Amplitude/FormantGri
    renders the selected object (Sound/Spectrogram/Pitch/Formant/Intensity/Spectrum) to a **PNG** via
    `Graphics_create_pngfile` and shows it (zoomable, shareable). The Analyze view also exports its
    spectrogram via `ImageRenderer`. This unlocks Praat's real vector drawing on iOS.
-5. **eSpeak "Speak" feature (T1)** — quick, high-delight.
-6. **Shared tier editor + full TextGrid editor (T3)** — *TextGrid editor done* (multi interval/point
-   tiers, boundaries at cursor, labels, `.TextGrid` export). *Still open:* the shared **curve** tier
-   editor (drag Pitch/Intensity/Duration points).
-7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — *Vowel editor done*
-   (drag F1×F2 → formant-synth playback, IPA reference vowels, F0 slider). *Still open:* the
-   **Manipulation/PSOLA** editor (pitch+duration tiers with resynthesis) and the **ExperimentMFC**
-   perception-experiment runner — the two largest remaining native editors.
+5. **eSpeak "Speak" feature (T1)** — **done.** Speak view (text → `SpeechSynthesizer` → Sound → play/analyse).
+6. **Shared tier editor + full TextGrid editor (T3)** — **done.** TextGrid editor (multi interval/point
+   tiers, boundaries at cursor, labels, `.TextGrid` export) plus the shared **curve** tier editor
+   `TierCurveView` (drag points on any time×value plane; tap to add) — used by the Manipulation editor
+   and reusable for Pitch/Intensity/Duration tiers.
+7. **Manipulation (PSOLA) editor, Vowel editor, ExperimentMFC runner (T3)** — **done.** *Vowel editor*
+   (drag F1×F2 → formant-synth playback, IPA reference vowels, F0 slider); *Manipulation/PSOLA editor*
+   (`Sound_to_Manipulation` → drag the pitch tier via `TierCurveView` → `Manipulation_to_Sound`
+   overlap-add resynthesis, played back); *ExperimentMFC runner* (real `ExperimentMFC` model — built-in
+   tone-height demo with synthesised stimuli + `PermuteBalanced` order, or `Run selected` to drive a
+   user-opened `.MFCexperiment`; response buttons laid out from the actual `ResponseMFC` rectangles;
+   records responses/reaction-times; exports CSV).
 
-Items 1–3 and 5 are bounded and expose the vast majority of Praat's value; 4 is the big multiplier for
-visualisation; 6–7 are the marquee interactive editors.
+All 14 sections of this roadmap are now exposed natively in the wrapper. Items 1–3 and 5 were bounded and
+expose the vast majority of Praat's value; 4 is the big multiplier for visualisation; 6–7 are the marquee
+interactive editors.
