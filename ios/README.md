@@ -73,11 +73,42 @@ for d in num clapack gsl glpk lame mp3 flac vorbis opusfile espeak portaudio whi
 bash ios/app/build-app.sh "iPhone 16"
 ```
 
-For a **real device**, set `PRAAT_IOS_SDK=iphoneos PRAAT_IOS_TARGET=arm64-apple-ios15.0`
-before building, and code-sign the `.app` with your provisioning profile.
-
 `ios/iosenv.sh` assumes Xcode at `~/Downloads/Xcode-beta.app` (via `DEVELOPER_DIR`); edit it
-for your install.
+for your install. To run on a **real iPhone**, see the next section.
+
+## Running on a real iPhone (signing & sideloading)
+
+iOS will not launch an app on a physical device unless it is **code-signed** — only the Simulator
+runs unsigned builds. Because the GPL keeps this off the App Store (see below), the way onto a
+device is to **sign it yourself**, which is free and fully supported.
+
+**For your own phone, just sign it — there are no GPL strings attached** (personal use isn't
+"distribution"). Use whatever signing identity you have:
+
+- **Free Apple ID** — works in Xcode (choose your personal team); the build runs on your own
+  devices but **expires after 7 days** (re-install to refresh).
+- **Paid Apple Developer Program** ($99/yr) — your *development* certificate signs builds that last
+  **one year** on your registered devices. If you already have it, use it: it's the least hassle
+  (no weekly re-signing). You do **not** need a paid account just to run it on your own phone.
+
+**Steps.** Build the engine libs for device arm64 (`PRAAT_IOS_SDK=iphoneos
+PRAAT_IOS_TARGET=arm64-apple-ios15.0 source ios/iosenv.sh`, then `make` each lib as above). The
+repo's `build-app.sh` targets the **Simulator**; for a device the simplest signer is **Xcode** —
+add the `ios/app` sources to a target, set *Signing & Capabilities → Team* = your Apple ID and a
+unique bundle id (e.g. `com.YOURNAME.praat-ios`), select your connected iPhone, and **Run**. Then
+on the phone: *Settings → General → VPN & Device Management → your profile → Trust*. (You can
+instead `codesign` the built `.app` with a manual provisioning profile and install via
+`ios-deploy` / Apple Configurator — Xcode is just far less fiddly.)
+
+**Sharing with other people — share the source, not your signed binary.** Free-account signatures
+expire in 7 days, ad-hoc distribution caps at 100 registered devices/year, and **Enterprise**
+certificates *may not* be used for public distribution (Apple revokes that). Point people at this
+repository so each person builds and signs with **their own** Apple ID; **AltStore / SideStore**
+automate exactly that (on-device re-signing with the user's Apple ID, and auto-refresh of the
+7-day signature). This is also what keeps the project **GPL-clean**: anyone can install their own
+**modified** build on their device (which the App Store forbids), and you never have to share your
+private signing key — GPLv3's "Installation Information" here is simply *the source plus these
+instructions*.
 
 ## Distribution & the App Store
 
