@@ -109,8 +109,15 @@ struct AnalyzeView: View {
         }
         .overlay(alignment: .top) {
             if audio.isRecording {
-                RecordingBanner(seconds: audio.recordSeconds, level: audio.recordLevel)
-                    .padding(.top, 8).padding(.horizontal, 16).transition(.move(edge: .top).combined(with: .opacity))
+                // [iOS port] The banner must NOT cover the Record/Stop toggle in topControls, or the
+                // recording can't be stopped — carry its own Stop button, as the Objects tab does.
+                HStack(spacing: 8) {
+                    RecordingBanner(seconds: audio.recordSeconds, level: audio.recordLevel)
+                    Button { record() } label: { Label("Stop", systemImage: "stop.fill") }
+                        .buttonStyle(.borderedProminent).tint(.red).controlSize(.small)
+                }
+                .padding(.top, 8).padding(.horizontal, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.default, value: audio.isRecording)

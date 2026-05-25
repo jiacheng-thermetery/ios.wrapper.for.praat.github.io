@@ -118,6 +118,9 @@ struct ObjectsView: View {
         }
         .animation(.default, value: audio.isRecording)
         .onAppear { m.refresh() }
+        // [iOS port] TabView doesn't reliably re-fire onAppear for a cached tab, so re-read the shared
+        // engine table whenever the Objects tab becomes active — picks up sounds recorded in Analyze.
+        .onChange(of: store.tab) { _, t in if t == 1 { m.refresh() } }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [.audio, .text, .data, .item],
                       allowsMultipleSelection: false) { result in
