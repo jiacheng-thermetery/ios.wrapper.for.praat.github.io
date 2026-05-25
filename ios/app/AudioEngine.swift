@@ -34,7 +34,9 @@ final class AudioEngine: ObservableObject {
 
     private func start() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        // [iOS port] allowBluetoothHFP is the iOS-26-SDK rename of the deprecated allowBluetooth
+        // (same raw value 0x4, API_AVAILABLE since iOS 1.0 — safe at our iOS 17 deployment target).
+        try? session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? session.setActive(true)
 
         let input = engine.inputNode

@@ -3,7 +3,8 @@
 # Part of the Spraak derivative. GPL-3.0-or-later.
 set -e
 cd "$(dirname "$0")/../.."          # repo root (upstream-praat)
-export DEVELOPER_DIR=/Users/jiachengliu/Downloads/Xcode-beta.app/Contents/Developer
+# [iOS port] Default to the system-installed Xcode; honour an explicit DEVELOPER_DIR override.
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 SDK=iphonesimulator
 SDKPATH="$(xcrun --sdk $SDK --show-sdk-path)"
 TGT="arm64-apple-ios17.0-simulator"   # app uses modern SwiftUI; iOS-15 engine libs link forward-compatibly
