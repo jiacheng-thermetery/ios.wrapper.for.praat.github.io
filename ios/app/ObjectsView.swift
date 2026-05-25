@@ -60,6 +60,7 @@ struct ObjectsView: View {
     @State private var showRename = false
     @State private var renameText = ""
     @State private var exportItem: ExportItem?
+    @State private var activeSpec: CmdSpec?
 
     // a small curated command palette per class (everything else: type a command below)
     private let palette: [String: [(String, String)]] = [
@@ -111,6 +112,16 @@ struct ObjectsView: View {
             Button("Rename") { if !renameText.isEmpty { m.run("Rename: \"\(renameText)\"") } }
         }
         .sheet(item: $exportItem) { ActivityView(items: [$0.url]) }
+        .sheet(item: $activeSpec) { spec in
+            CommandFormView(spec: spec) { line in
+                if spec.isCreate { m.runRaw(line) } else { m.run(line) }
+            }
+        }
+    }
+
+    private func specsForSelection() -> [CmdSpec] {
+        guard let cls = m.selectedClasses.first else { return [] }
+        return CmdSpec.byClass[cls] ?? []
     }
 
     /// Write the selected object to a temp file (WAV for Sound, Praat text otherwise) and share it.
@@ -137,8 +148,14 @@ struct ObjectsView: View {
                     Button("Strings (tokens)") { m.runRaw(#"Create Strings as tokens: "the quick brown fox", " ""#) }
                     Button("Matrix (10×10)") { m.runRaw(#"Create simple Matrix: "m", 10, 10, ~ row + col"#) }
                     Button("KlattGrid example") { m.runRaw("Create KlattGrid example") }
+                    Divider()
+                    ForEach(CmdSpec.creates) { spec in Button(spec.title) { activeSpec = spec } }
                 } label: { Label("New", systemImage: "plus") }
                 Button { showImporter = true } label: { Label("Open", systemImage: "folder") }
+                Menu {
+                    ForEach(specsForSelection()) { spec in Button(spec.title) { activeSpec = spec } }
+                } label: { Label("Commands", systemImage: "slider.horizontal.3") }
+                    .disabled(specsForSelection().isEmpty)
                 Button { renameText = ""; showRename = true } label: { Label("Rename", systemImage: "pencil") }
                     .disabled(m.selected.count != 1)
                 Button(role: .destructive) { m.run("Remove") } label: { Label("Remove", systemImage: "trash") }
