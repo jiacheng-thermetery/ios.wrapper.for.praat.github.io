@@ -12,7 +12,8 @@ struct ContentView: View {
             ObjectsView().tabItem { Label("Objects", systemImage: "list.bullet") }.tag(1)
             VowelView().tabItem { Label("Vowel", systemImage: "mouth") }.tag(2)
             ManipulationView().tabItem { Label("Manip.", systemImage: "slider.vertical.3") }.tag(3)
-            ScriptConsoleView().tabItem { Label("Script", systemImage: "terminal") }.tag(4)
+            ExperimentMFCView().tabItem { Label("Experiment", systemImage: "checklist") }.tag(4)
+            ScriptConsoleView().tabItem { Label("Script", systemImage: "terminal") }.tag(5)
         }
         .overlay(alignment: .topTrailing) {
             Button { showAbout = true } label: { Image(systemName: "info.circle") }

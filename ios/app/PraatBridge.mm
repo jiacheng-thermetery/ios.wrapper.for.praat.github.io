@@ -27,6 +27,7 @@
 #include "Manipulation.h"
 #include "PitchTier.h"
 #include "RealTier.h"
+#include "ExperimentMFC.h"
 
 #include <string>
 #include <vector>
@@ -349,4 +350,159 @@ int praatios_manipulationResynth (const double *times, const double *values, int
 		*outRate = 1.0 / s -> dx;
 		return (int) ns;
 	} catch (MelderError) { Melder_clearError (); return 0; }
+}
+
+/* ===================== ExperimentMFC perception-experiment runner =====================
+ * Drives a real Praat ExperimentMFC. praatios_mfcCreateDemo builds a built-in tone-height
+ * identification experiment in memory (stimuli synthesised with Sound_createAsPureTone, so
+ * no files are needed); praatios_mfcUseSelected runs an ExperimentMFC the user opened from a
+ * file (the authentic path — ExperimentMFC_start reads the WAV stimuli from disk). Trials are
+ * randomised PermuteBalanced (as in ExperimentMFC_start) and the stimulus audio is rendered
+ * to Swift to be played through AVAudioEngine, since Praat's own audio path is gated out. */
+static autoExperimentMFC theExperiment;
+
+/* Fill the trial sequence the way ExperimentMFC_start does for PermuteBalanced. */
+static void mfcBuildBalancedOrder (ExperimentMFC e) {
+	e -> numberOfTrials = e -> numberOfDifferentStimuli * e -> numberOfReplicationsPerStimulus;
+	e -> stimuli       = zero_INTVEC (e -> numberOfTrials);
+	e -> responses     = zero_INTVEC (e -> numberOfTrials);
+	e -> goodnesses    = zero_VEC    (e -> numberOfTrials);
+	e -> reactionTimes = zero_VEC    (e -> numberOfTrials);
+	for (integer rep = 1; rep <= e -> numberOfReplicationsPerStimulus; rep ++) {
+		integer off = (rep - 1) * e -> numberOfDifferentStimuli;
+		for (integer s = 1; s <= e -> numberOfDifferentStimuli; s ++) e -> stimuli [off + s] = s;
+		for (integer k = e -> numberOfDifferentStimuli; k >= 2; k --) {   /* Fisher–Yates within block */
+			integer j = NUMrandomInteger (1, k);
+			integer tmp = e -> stimuli [off + k]; e -> stimuli [off + k] = e -> stimuli [off + j]; e -> stimuli [off + j] = tmp;
+		}
+	}
+}
+
+int praatios_mfcCreateDemo (void) {
+	praatios_init ();
+	try {
+		autoExperimentMFC e = Thing_new (ExperimentMFC);
+		const double sr = 44100.0, dur = 0.4;
+		const double freqs [3] = { 300.0, 550.0, 900.0 };
+		const char32 *labels [3] = { U"low", U"mid", U"high" };
+		const double lefts [3] = { 0.07, 0.39, 0.71 };
+		e -> stimuliAreSounds = true;
+		e -> responsesAreSounds = false;
+		e -> numberOfDifferentStimuli = 3;
+		e -> stimulus = newvectorzero <structStimulusMFC> (3);
+		for (int i = 0; i < 3; i ++) {
+			e -> stimulus [i + 1]. name = Melder_dup (Melder_fixed (freqs [i], 0));
+			e -> stimulus [i + 1]. visibleText = Melder_dup (U"Listen…");
+			e -> stimulus [i + 1]. sound = Sound_createAsPureTone (1, 0.0, dur, sr, freqs [i], 0.4, 0.02, 0.02);
+		}
+		e -> numberOfReplicationsPerStimulus = 3;
+		e -> randomize = kExperiment_randomize::PERMUTE_BALANCED;
+		e -> startText = Melder_dup (U"Tone-height identification.\n\nYou will hear a tone. Decide whether it is low, mid or high, and tap the matching button.\n\nTap to begin.");
+		e -> runText   = Melder_dup (U"Which tone did you hear?");
+		e -> pauseText = Melder_dup (U"Pause.\nTap to continue.");
+		e -> endText   = Melder_dup (U"The experiment is finished.\nThank you for participating!");
+		e -> numberOfDifferentResponses = 3;
+		e -> response = newvectorzero <structResponseMFC> (3);
+		for (int i = 0; i < 3; i ++) {
+			e -> response [i + 1]. label = Melder_dup (labels [i]);
+			e -> response [i + 1]. name  = Melder_dup (Melder_fixed (freqs [i], 0));
+			e -> response [i + 1]. left = lefts [i]; e -> response [i + 1]. right = lefts [i] + 0.22;
+			e -> response [i + 1]. bottom = 0.35; e -> response [i + 1]. top = 0.62;
+		}
+		e -> numberOfGoodnessCategories = 0;
+		mfcBuildBalancedOrder (e.get());
+		theExperiment = e.move();
+		return (int) theExperiment -> numberOfTrials;
+	} catch (MelderError) { Melder_clearError (); return 0; }
+}
+
+int praatios_mfcUseSelected (void) {
+	praatios_init ();
+	for (integer i = 1; i <= theCurrentPraatObjects -> n; i ++) {
+		praat_Object obj = & theCurrentPraatObjects -> list [i];
+		if (obj -> isSelected && str32equ (obj -> klas -> className, U"ExperimentMFC")) {
+			try {
+				theExperiment = Data_copy ((ExperimentMFC) obj -> object);
+				ExperimentMFC_start (theExperiment.get());   /* reads stimulus WAVs from disk */
+				return (int) theExperiment -> numberOfTrials;
+			} catch (MelderError) { Melder_clearError (); return 0; }
+		}
+	}
+	return 0;
+}
+
+int praatios_mfcNumberOfTrials (void) { return theExperiment. get() ? (int) theExperiment -> numberOfTrials : 0; }
+
+const char *praatios_mfcText (int which) {
+	if (! theExperiment. get()) return "";
+	conststring32 t = which == 0 ? theExperiment -> startText.get()
+	                 : which == 1 ? theExperiment -> runText.get()
+	                 : which == 2 ? theExperiment -> pauseText.get()
+	                              : theExperiment -> endText.get();
+	g_result = (const char *) Melder_peek32to8 (t ? t : U"");
+	return g_result.c_str ();
+}
+
+int praatios_mfcResponseCount (void) { return theExperiment. get() ? (int) theExperiment -> numberOfDifferentResponses : 0; }
+
+const char *praatios_mfcResponseInfo (int i) {   /* "label|left|right|bottom|top" */
+	g_result.clear ();
+	if (! theExperiment. get() || i < 1 || i > theExperiment -> numberOfDifferentResponses) return "";
+	structResponseMFC & r = theExperiment -> response [i];
+	char buf [256];
+	snprintf (buf, sizeof buf, "%s|%.4f|%.4f|%.4f|%.4f",
+		(const char *) Melder_peek32to8 (r. label.get() ? r. label.get() : U""),
+		r. left, r. right, r. bottom, r. top);
+	g_result = buf;
+	return g_result.c_str ();
+}
+
+int praatios_mfcStimulusForTrial (int trial) {
+	if (! theExperiment. get() || trial < 1 || trial > theExperiment -> numberOfTrials) return 0;
+	return (int) theExperiment -> stimuli [trial];
+}
+
+const char *praatios_mfcStimulusText (int trial) {
+	g_result.clear ();
+	int istim = praatios_mfcStimulusForTrial (trial);
+	if (istim < 1) return "";
+	conststring32 t = theExperiment -> stimulus [istim]. visibleText.get();
+	g_result = (const char *) Melder_peek32to8 (t ? t : U"");
+	return g_result.c_str ();
+}
+
+int praatios_mfcStimulusSound (int trial, float *out, int maxSamples, double *outRate) {
+	int istim = praatios_mfcStimulusForTrial (trial);
+	if (istim < 1) return 0;
+	Sound snd = theExperiment -> stimulus [istim]. sound.get();
+	if (! snd) return 0;
+	integer ns = snd -> nx; if (ns > maxSamples) ns = maxSamples;
+	for (integer i = 1; i <= ns; i ++) out [i - 1] = (float) snd -> z [1] [i];
+	*outRate = 1.0 / snd -> dx;
+	return (int) ns;
+}
+
+void praatios_mfcRecordResponse (int trial, int iresp, double goodness, double reactionTime) {
+	if (! theExperiment. get() || trial < 1 || trial > theExperiment -> numberOfTrials) return;
+	theExperiment -> responses [trial] = iresp;
+	theExperiment -> goodnesses [trial] = goodness;
+	theExperiment -> reactionTimes [trial] = reactionTime;
+}
+
+const char *praatios_mfcResultsCSV (void) {
+	g_result.clear ();
+	if (! theExperiment. get()) return "";
+	g_result = "trial,stimulus,response,reactionTime\n";
+	for (integer t = 1; t <= theExperiment -> numberOfTrials; t ++) {
+		integer is = theExperiment -> stimuli [t], ir = theExperiment -> responses [t];
+		conststring32 sName = (is >= 1) ? theExperiment -> stimulus [is]. name.get() : U"";
+		conststring32 rName = (ir >= 1) ? theExperiment -> response [ir]. label.get() : U"";
+		char buf [256];
+		snprintf (buf, sizeof buf, "%lld,%s,%s,%.3f\n", (long long) t,
+			(const char *) Melder_peek32to8 (sName ? sName : U""),
+			(const char *) Melder_peek32to8 (rName ? rName : U""),
+			theExperiment -> reactionTimes [t]);
+		g_result += buf;
+	}
+	return g_result.c_str ();
 }

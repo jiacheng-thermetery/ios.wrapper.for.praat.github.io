@@ -25,6 +25,22 @@ int praatios_manipulationStart (int maxN, double *times, double *values);   /* r
 int praatios_manipulationResynth (const double *times, const double *values, int n,
         float *out, int maxSamples, double *outRate);   /* returns #samples */
 
+/* --- ExperimentMFC perception experiment (multiple forced choice) ---
+ * mfcCreateDemo builds a built-in tone-height identification experiment (no files needed);
+ * mfcUseSelected runs an ExperimentMFC the user opened from a file. Both return #trials (0 = none).
+ * The UI plays each trial's stimulus (rendered to PCM) and records the tapped response. */
+int         praatios_mfcCreateDemo (void);
+int         praatios_mfcUseSelected (void);
+int         praatios_mfcNumberOfTrials (void);
+const char *praatios_mfcText (int which);            /* 0 start, 1 run, 2 pause, 3 end */
+int         praatios_mfcResponseCount (void);
+const char *praatios_mfcResponseInfo (int i1based);  /* "label|left|right|bottom|top" (0..1 coords) */
+int         praatios_mfcStimulusForTrial (int trial1based);   /* stimulus index, 0 if none */
+const char *praatios_mfcStimulusText (int trial1based);       /* visibleText for the trial */
+int         praatios_mfcStimulusSound (int trial1based, float *out, int maxSamples, double *outRate);
+void        praatios_mfcRecordResponse (int trial1based, int iresp, double goodness, double reactionTime);
+const char *praatios_mfcResultsCSV (void);
+
 /* --- analysis: set the current Sound from mono float PCM --- */
 int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */
