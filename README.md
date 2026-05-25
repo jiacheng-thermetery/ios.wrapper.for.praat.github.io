@@ -1,3 +1,31 @@
+# Spraak — *unofficial* derivative
+
+**This is a modified version of Praat, not the original.** It is an **unofficial** iOS port and is
+**not produced, reviewed, or endorsed by Paul Boersma, David Weenink, or the University of Amsterdam.**
+
+It cross-compiles Praat's analysis + scripting engine for iOS (arm64) and adds a SwiftUI front end:
+record/analyze with a live spectrogram and pitch/formant/intensity overlays, a native **Objects**
+window over the live interpreter, eSpeak text-to-speech, and TextGrid / Manipulation (PSOLA) / Vowel /
+ExperimentMFC editors plus a script console. Almost everything new lives in the [`ios/`](ios/)
+directory; a small number of core source files carry tagged `// [iOS port]` edits (e.g. an iOS Quartz
+Graphics drawing path). For details, build instructions, and the change record see:
+
+- [`ios/README.md`](ios/README.md) — what the port is and how to build & run it
+- [`ios/PORTING_NOTES.md`](ios/PORTING_NOTES.md) — every change made to upstream source (GPLv3 §5 record)
+- [`ios/LICENSING.md`](ios/LICENSING.md) — license audit & GPL-compliance plan
+- [`ios/FEATURES_ROADMAP.md`](ios/FEATURES_ROADMAP.md) — feature status
+
+**License:** free software under **GPL-3.0-or-later**, exactly like upstream Praat, and distributed
+WITHOUT ANY WARRANTY. Modifications for the iOS port were made in 2024–2026 by the port's contributors.
+Because the GPL is incompatible with the Apple App Store Terms of Service, **this build cannot be
+distributed via the App Store** — use it by building from source or sideloading.
+
+Upstream Praat: <https://github.com/praat/praat> · <https://praat.org>
+
+---
+
+*The original Praat README follows.*
+
 # Praat: doing phonetics by computer
 
 Welcome to Praat! Praat is a speech analysis tool used for doing phonetics by computer.
