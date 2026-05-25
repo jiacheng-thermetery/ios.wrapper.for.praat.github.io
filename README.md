@@ -10,10 +10,84 @@ ExperimentMFC editors plus a script console. Almost everything new lives in the 
 directory; a small number of core source files carry tagged `// [iOS port]` edits (e.g. an iOS Quartz
 Graphics drawing path). For details, build instructions, and the change record see:
 
-- [`ios/README.md`](ios/README.md) — what the port is and how to build & run it
+- [`ios/README.md`](ios/README.md) — deep dive: what works today, the file map, and design notes
 - [`ios/PORTING_NOTES.md`](ios/PORTING_NOTES.md) — every change made to upstream source (GPLv3 §5 record)
 - [`ios/LICENSING.md`](ios/LICENSING.md) — license audit & GPL-compliance plan
 - [`ios/FEATURES_ROADMAP.md`](ios/FEATURES_ROADMAP.md) — feature status
+
+## Installation
+
+> **New to building iOS apps?** This setup — Xcode, the cross-compile toolchain, and (for a real
+> device) code-signing — is genuinely fiddly and **not trivial for beginners.** If the steps below
+> are over your head, paste this README into your LLM of choice (Claude, ChatGPT, …) and ask it to
+> set up the environment with you, step by step, for your machine.
+
+Requires [Xcode](https://developer.apple.com/xcode/) with the iOS SDK. All commands run from the
+repository root.
+
+### On the iOS Simulator (no signing needed)
+
+```sh
+# 1. Build Praat's engine (static libs) for the iOS Simulator (arm64):
+source ios/iosenv.sh
+for d in kar melder sys dwsys stat fon foned LPC dwtools gram FFNet EEG artsynth sensors; do make -C $d; done
+for d in num clapack gsl glpk lame mp3 flac vorbis opusfile espeak portaudio whispercpp; do make -C external/$d; done
+
+# 2. Build, install and launch the SwiftUI app on a booted simulator:
+bash ios/app/build-app.sh "iPhone 16"
+```
+
+`ios/iosenv.sh` and `ios/app/build-app.sh` default to the system Xcode at `/Applications/Xcode.app`;
+set `DEVELOPER_DIR` to override (e.g. `export DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer`).
+
+### Running on a real iPhone (signing & sideloading)
+
+iOS will not launch an app on a physical device unless it is **code-signed** — only the Simulator
+runs unsigned builds. Because the GPL keeps this off the App Store (see below), the way onto a
+device is to **sign it yourself**, which is free and fully supported.
+
+**For your own phone, just sign it — there are no GPL strings attached** (personal use isn't
+"distribution"). Use whatever signing identity you have:
+
+- **Free Apple ID** — works in Xcode (choose your personal team); the build runs on your own
+  devices but **expires after 7 days** (re-install to refresh).
+- **Paid Apple Developer Program** ($99/yr) — your *development* certificate signs builds that last
+  **one year** on your registered devices. If you already have it, use it: it's the least hassle
+  (no weekly re-signing). You do **not** need a paid account just to run it on your own phone.
+
+> ⚠️ **The $99/year is Apple's fee, paid in full to Apple — not a subscription from us.** Neither
+> this project's contributors nor the original Praat authors provide it, receive any part of it, or
+> have any financial relationship with you. This software is **free** in both senses (freedom *and*
+> price): we charge nothing and never will. The only thing money buys here is Apple's optional
+> convenience — a developer account whose signing certificate lasts a year instead of the free
+> account's 7 days. The **free Apple ID path costs $0** and is enough to run the app.
+
+**Steps.** Build the engine libs for device arm64 (`PRAAT_IOS_SDK=iphoneos
+PRAAT_IOS_TARGET=arm64-apple-ios15.0 source ios/iosenv.sh`, then `make` each lib as above). The
+repo's `build-app.sh` targets the **Simulator**; for a device the simplest signer is **Xcode** —
+add the `ios/app` sources to a target, set *Signing & Capabilities → Team* = your Apple ID and a
+unique bundle id (e.g. `com.YOURNAME.praat-ios`), select your connected iPhone, and **Run**. Then
+on the phone: *Settings → General → VPN & Device Management → your profile → Trust*. (You can
+instead `codesign` the built `.app` with a manual provisioning profile and install via
+`ios-deploy` / Apple Configurator — Xcode is just far less fiddly.)
+
+**Sharing with other people — share the source, not your signed binary.** Free-account signatures
+expire in 7 days, ad-hoc distribution caps at 100 registered devices/year, and **Enterprise**
+certificates *may not* be used for public distribution (Apple revokes that). Point people at this
+repository so each person builds and signs with **their own** Apple ID; **AltStore / SideStore**
+automate exactly that (on-device re-signing with the user's Apple ID, and auto-refresh of the
+7-day signature). This is also what keeps the project **GPL-clean**: anyone can install their own
+**modified** build on their device (which the App Store forbids), and you never have to share your
+private signing key — GPLv3's "Installation Information" here is simply *the source plus these
+instructions*.
+
+## Distribution & the App Store
+
+**This app cannot be distributed through the Apple App Store.** The GPL is incompatible with
+the App Store Terms of Service (DRM / device limits / installation restrictions), and Praat has
+multiple copyright holders, so no third party can grant an App-Store exception. Distribute it as
+**source**, and run it by **building it yourself** or **sideloading** (e.g. a free-account 7-day
+signed build, or AltStore/SideStore). See [`ios/LICENSING.md`](ios/LICENSING.md) §4.
 
 **License:** free software under **GPL-3.0-or-later**, exactly like upstream Praat, and distributed
 WITHOUT ANY WARRANTY. Modifications for the iOS port were made in 2024–2026 by the port's contributors.

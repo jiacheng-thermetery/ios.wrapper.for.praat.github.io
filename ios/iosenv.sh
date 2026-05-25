@@ -1,6 +1,7 @@
 # Sourced by build scripts. Sets up iOS (simulator, arm64) cross-compile toolchain.
 # This file is part of the Spraak derivative. GPL-3.0-or-later.
-export DEVELOPER_DIR=/Users/jiachengliu/Downloads/Xcode-beta.app/Contents/Developer
+# [iOS port] Default to the system-installed Xcode; honour an explicit DEVELOPER_DIR override.
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 # Target: iOS Simulator on Apple Silicon (arm64). For a real device, use:
 #   PRAAT_IOS_SDK=iphoneos  PRAAT_IOS_TARGET=arm64-apple-ios15.0
