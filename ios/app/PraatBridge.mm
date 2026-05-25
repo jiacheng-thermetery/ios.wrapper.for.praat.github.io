@@ -24,12 +24,16 @@
 #include "Spectrum.h"
 #include "Spectrogram.h"
 #include "Graphics.h"
+#include "Manipulation.h"
+#include "PitchTier.h"
+#include "RealTier.h"
 
 #include <string>
 #include <vector>
 #include <cmath>
 
-static autoSound       theSound;
+static autoSound        theSound;
+static autoManipulation theManipulation;
 static autoSpectrogram theSpectrogram;
 static autoPitch       thePitch;
 static autoFormant     theFormant;
@@ -314,4 +318,35 @@ const float *praatios_spectrumSlice (double t, double windowDur,
 	*outDbMax = dbMax;
 	*outDbMin = (dbMax - dbMin > 100.0) ? dbMax - 100.0 : dbMin;
 	return g_slice.data();
+}
+
+/* --- Manipulation (PSOLA) --- */
+int praatios_manipulationStart (int maxN, double *times, double *values) {
+	if (! theSound. get()) return 0;
+	try {
+		theManipulation = Sound_to_Manipulation (theSound.get(), 0.01, gPitchFloor, gPitchCeiling);
+	} catch (MelderError) { Melder_clearError (); return 0; }
+	PitchTier pt = theManipulation -> pitch.get();
+	integer n = pt -> points.size;
+	if (n > maxN) n = maxN;
+	for (integer i = 1; i <= n; i ++) {
+		times [i - 1] = pt -> points.at [i] -> number;
+		values [i - 1] = pt -> points.at [i] -> value;
+	}
+	return (int) n;
+}
+
+int praatios_manipulationResynth (const double *times, const double *values, int n,
+		float *out, int maxSamples, double *outRate) {
+	if (! theManipulation. get()) return 0;
+	try {
+		autoPitchTier pt = PitchTier_create (theManipulation -> xmin, theManipulation -> xmax);
+		for (int i = 0; i < n; i ++) RealTier_addPoint ((RealTier) pt.get(), times [i], values [i]);
+		theManipulation -> pitch = pt.move();
+		autoSound s = Manipulation_to_Sound (theManipulation.get(), Manipulation_OVERLAPADD);
+		integer ns = s -> nx; if (ns > maxSamples) ns = maxSamples;
+		for (integer i = 1; i <= ns; i ++) out [i - 1] = (float) s -> z [1] [i];
+		*outRate = 1.0 / s -> dx;
+		return (int) ns;
+	} catch (MelderError) { Melder_clearError (); return 0; }
 }

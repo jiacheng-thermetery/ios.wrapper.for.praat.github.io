@@ -20,6 +20,11 @@ const char *praatios_objectInfo (int index1based);   /* "id|className|name|selec
  * file using Praat's own Quartz Graphics. Returns "ok" or an error message. */
 const char *praatios_drawSelectedToPNG (const char *path, double widthInches, double heightInches, int resolution);
 
+/* --- Manipulation (PSOLA): edit the pitch tier of the current Sound and resynthesize --- */
+int praatios_manipulationStart (int maxN, double *times, double *values);   /* returns #pitch points */
+int praatios_manipulationResynth (const double *times, const double *values, int n,
+        float *out, int maxSamples, double *outRate);   /* returns #samples */
+
 /* --- analysis: set the current Sound from mono float PCM --- */
 int    praatios_setSound (const float *samples, int count, double sampleRate);
 double praatios_soundDuration (void);          /* seconds, 0 if no sound */
