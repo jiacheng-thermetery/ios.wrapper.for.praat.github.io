@@ -12,13 +12,21 @@ APPDIR="ios/app/Spraak.app"
 BID="com.thermetery.spraak"
 DEVICE="${1:-iPhone 16}"
 
-LIBS="fon/libfon.a artsynth/libartsynth.a FFNet/libFFNet.a gram/libgram.a EEG/libEEG.a \
+# Engine libs: link the staged *simulator* slices. ios/build-engine-libs.sh stages
+# device & simulator arm64 slices separately so the two builds don't clobber each other.
+ENGINE=ios/build-libs/iphonesimulator
+if [ ! -f "$ENGINE/fon/libfon.a" ]; then
+  echo "Simulator engine libs not staged. Run: ios/build-engine-libs.sh iphonesimulator" >&2
+  exit 1
+fi
+RELLIBS="fon/libfon.a artsynth/libartsynth.a FFNet/libFFNet.a gram/libgram.a EEG/libEEG.a \
  LPC/libLPC.a dwtools/libdwtools.a sensors/libsensors.a foned/libfoned.a fon/libfon.a \
  stat/libstat.a dwsys/libdwsys.a sys/libsys.a melder/libmelder.a kar/libkar.a \
  external/espeak/libespeak.a external/portaudio/libportaudio.a external/flac/libflac.a \
  external/lame/liblame.a external/mp3/libmp3.a external/glpk/libglpk.a \
  external/clapack/libclapack.a external/gsl/libgsl.a external/num/libnum.a \
  external/vorbis/libvorbis.a external/opusfile/libopusfile.a external/whispercpp/libwhisper.a"
+LIBS=""; for l in $RELLIBS; do LIBS="$LIBS $ENGINE/$l"; done
 
 echo "[1/4] compiling C++ bridge"
 xcrun --sdk $SDK clang++ -target $TGT -isysroot "$SDKPATH" -std=gnu++17 \

@@ -1,12 +1,13 @@
 # XcodeGen spec for Spraak — an unofficial iOS app built on the Praat engine.
 # GPL-3.0-or-later. Generates Spraak.xcodeproj so Xcode (or
 # `xcodebuild -allowProvisioningUpdates`) can build + code-sign the app for a real
-# iPhone — the shell build-app.sh targets the Simulator and does not sign. Engine
-# static libs must already be built for the device slice
-# (PRAAT_IOS_SDK=iphoneos PRAAT_IOS_TARGET=arm64-apple-ios15.0).
+# iPhone — the shell build-app.sh targets the Simulator and does not sign. The engine
+# static libs are linked per-SDK from ios/build-libs/<sdk>/ (see ENGINE_LIBS_DIR below),
+# so device and simulator builds keep their own arm64 slices and never clobber each other.
 #
 # Build it:
 #   brew install xcodegen
+#   ios/build-engine-libs.sh both        # build + stage engine libs for device & simulator
 #   export DEVELOPMENT_TEAM=XXXXXXXXXX   # your 10-char Apple Developer Team ID
 #   xcodegen generate                    # -> Spraak.xcodeproj (git-ignored, regenerable)
 # then open Spraak.xcodeproj, select your iPhone, and Run (Xcode registers the
@@ -81,35 +82,42 @@ targets:
         # C only (pa_ios_hostapis.c includes "pa_hostapi.h").
         OTHER_CFLAGS:
           - -iquote$(SRCROOT)/external/portaudio
+        # Per-SDK engine-lib dir: device & simulator arm64 slices can't share one .a
+        # (same arch — lipo refuses; it's why .xcframeworks exist), so each platform
+        # links its own staged set, built/staged by ios/build-engine-libs.sh. Xcode
+        # substitutes the path matching the active SDK.
+        ENGINE_LIBS_DIR: $(SRCROOT)/ios/build-libs/iphonesimulator
+        "ENGINE_LIBS_DIR[sdk=iphoneos*]": $(SRCROOT)/ios/build-libs/iphoneos
+        "ENGINE_LIBS_DIR[sdk=iphonesimulator*]": $(SRCROOT)/ios/build-libs/iphonesimulator
         # Static engine libs, in the upstream link order (fon appears twice on purpose).
         OTHER_LDFLAGS:
-          - $(SRCROOT)/fon/libfon.a
-          - $(SRCROOT)/artsynth/libartsynth.a
-          - $(SRCROOT)/FFNet/libFFNet.a
-          - $(SRCROOT)/gram/libgram.a
-          - $(SRCROOT)/EEG/libEEG.a
-          - $(SRCROOT)/LPC/libLPC.a
-          - $(SRCROOT)/dwtools/libdwtools.a
-          - $(SRCROOT)/sensors/libsensors.a
-          - $(SRCROOT)/foned/libfoned.a
-          - $(SRCROOT)/fon/libfon.a
-          - $(SRCROOT)/stat/libstat.a
-          - $(SRCROOT)/dwsys/libdwsys.a
-          - $(SRCROOT)/sys/libsys.a
-          - $(SRCROOT)/melder/libmelder.a
-          - $(SRCROOT)/kar/libkar.a
-          - $(SRCROOT)/external/espeak/libespeak.a
-          - $(SRCROOT)/external/portaudio/libportaudio.a
-          - $(SRCROOT)/external/flac/libflac.a
-          - $(SRCROOT)/external/lame/liblame.a
-          - $(SRCROOT)/external/mp3/libmp3.a
-          - $(SRCROOT)/external/glpk/libglpk.a
-          - $(SRCROOT)/external/clapack/libclapack.a
-          - $(SRCROOT)/external/gsl/libgsl.a
-          - $(SRCROOT)/external/num/libnum.a
-          - $(SRCROOT)/external/vorbis/libvorbis.a
-          - $(SRCROOT)/external/opusfile/libopusfile.a
-          - $(SRCROOT)/external/whispercpp/libwhisper.a
+          - $(ENGINE_LIBS_DIR)/fon/libfon.a
+          - $(ENGINE_LIBS_DIR)/artsynth/libartsynth.a
+          - $(ENGINE_LIBS_DIR)/FFNet/libFFNet.a
+          - $(ENGINE_LIBS_DIR)/gram/libgram.a
+          - $(ENGINE_LIBS_DIR)/EEG/libEEG.a
+          - $(ENGINE_LIBS_DIR)/LPC/libLPC.a
+          - $(ENGINE_LIBS_DIR)/dwtools/libdwtools.a
+          - $(ENGINE_LIBS_DIR)/sensors/libsensors.a
+          - $(ENGINE_LIBS_DIR)/foned/libfoned.a
+          - $(ENGINE_LIBS_DIR)/fon/libfon.a
+          - $(ENGINE_LIBS_DIR)/stat/libstat.a
+          - $(ENGINE_LIBS_DIR)/dwsys/libdwsys.a
+          - $(ENGINE_LIBS_DIR)/sys/libsys.a
+          - $(ENGINE_LIBS_DIR)/melder/libmelder.a
+          - $(ENGINE_LIBS_DIR)/kar/libkar.a
+          - $(ENGINE_LIBS_DIR)/external/espeak/libespeak.a
+          - $(ENGINE_LIBS_DIR)/external/portaudio/libportaudio.a
+          - $(ENGINE_LIBS_DIR)/external/flac/libflac.a
+          - $(ENGINE_LIBS_DIR)/external/lame/liblame.a
+          - $(ENGINE_LIBS_DIR)/external/mp3/libmp3.a
+          - $(ENGINE_LIBS_DIR)/external/glpk/libglpk.a
+          - $(ENGINE_LIBS_DIR)/external/clapack/libclapack.a
+          - $(ENGINE_LIBS_DIR)/external/gsl/libgsl.a
+          - $(ENGINE_LIBS_DIR)/external/num/libnum.a
+          - $(ENGINE_LIBS_DIR)/external/vorbis/libvorbis.a
+          - $(ENGINE_LIBS_DIR)/external/opusfile/libopusfile.a
+          - $(ENGINE_LIBS_DIR)/external/whispercpp/libwhisper.a
           - -lc++
           - -lm
     dependencies:
