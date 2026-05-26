@@ -76,7 +76,7 @@ struct AnalyzeView: View {
     @State private var showIntensity = true
     @State private var pictureExport: ExportItem?
     @State private var showSpeak = false
-    @State private var speakText = "Hello from Spraak"
+    @State private var speakText = "Frogs are cute. I love frogs. Frogs!"
     @State private var speakLang = "English (Great Britain)"
     @State private var speakVoice = "Female1"
 
