@@ -76,7 +76,7 @@ struct AnalyzeView: View {
     @State private var showIntensity = true
     @State private var pictureExport: ExportItem?
     @State private var showSpeak = false
-    @State private var speakText = "Hello from Praat on iOS"
+    @State private var speakText = "Hello from Spraak"
     @State private var speakLang = "English (Great Britain)"
     @State private var speakVoice = "Female1"
 
@@ -89,8 +89,11 @@ struct AnalyzeView: View {
                 if model.hasSound {
                     waveform.frame(height: 52)
                     SpectrogramView(model: model, cursorTime: $cursorTime, selection: $selection,
-                                    showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity)
+                                    showPitch: showPitch, showFormants: showFormants, showIntensity: showIntensity,
+                                    onZoom: { a, b in pushZoom(); model.setView(a, b) })
                         .frame(minHeight: 190)
+                    Text("Press & hold then drag to select · pinch to zoom · tap to place cursor")
+                        .font(.caption2).foregroundStyle(.secondary)
                     timeAxis
                     if let cv = cursorValues { cursorReadout(cv) }
                     tierControls

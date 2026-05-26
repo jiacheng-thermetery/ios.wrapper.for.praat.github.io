@@ -24,50 +24,126 @@ struct SpectrogramView: View {
     var showPitch: Bool
     var showFormants: Bool
     var showIntensity: Bool
+    /// Commit a pinch-zoom to a new [start,end] window. ContentView records zoom
+    /// history and calls model.setView; default no-op for the non-interactive picture.
+    var onZoom: (Double, Double) -> Void = { _, _ in }
+
     @State private var dragMode: SpecDragMode = .none
+    @State private var selectionArmed = false        // long-press fired → dragging now selects
+    @State private var pressStartX: Double = 0        // x where the current touch began
+    @State private var pinchScale: CGFloat = 1        // live horizontal scale during a pinch
+    @State private var pinchAnchor: UnitPoint = .center
+    @State private var isPinching = false
 
     var body: some View {
         GeometryReader { geo in
             let W = geo.size.width, H = geo.size.height
-            ZStack(alignment: .topLeading) {
-                if let img = model.spectrogram {
-                    Image(decorative: img, scale: 1)
-                        .resizable().interpolation(.low)
-                        .frame(width: W, height: H)
-                } else {
-                    Color(white: 0.95)
-                    Text("Record or load a sound").font(.caption)
-                        .foregroundStyle(.secondary).padding(8)
+            ZStack(alignment: .topLeading) {     // gesture surface (never scaled)
+                ZStack(alignment: .topLeading) { // visual layer (scaled live during a pinch)
+                    if let img = model.spectrogram {
+                        Image(decorative: img, scale: 1)
+                            .resizable().interpolation(.low)
+                            .frame(width: W, height: H)
+                    } else {
+                        Color(white: 0.95)
+                        Text("Record or load a sound").font(.caption)
+                            .foregroundStyle(.secondary).padding(8)
+                    }
+                    Canvas { ctx, size in draw(ctx, size) }.frame(width: W, height: H)
                 }
-                Canvas { ctx, size in draw(ctx, size) }.frame(width: W, height: H)
+                .frame(width: W, height: H)
+                .scaleEffect(x: pinchScale, y: 1, anchor: pinchAnchor)
+                .clipped()
             }
+            .frame(width: W, height: H)
             .contentShape(Rectangle())
-            // [iOS port] highPriority so cursor/selection wins over an enclosing ScrollView
-            // (the Analyze view scrolls in landscape); scrolling still works on the surrounding panels.
-            .highPriorityGesture(DragGesture(minimumDistance: 0)
-                .onChanged { g in
-                    guard model.hasSound else { return }
-                    if dragMode == .none { dragMode = decideMode(startX: g.startLocation.x, W: W) }
-                    let t = timeAt(g.location.x, W)
-                    switch dragMode {
-                    case .moveCursor: cursorTime = t
-                    case .resizeLo: if let s = selection { selection = TimeRange(a: t, b: s.hi) }
-                    case .resizeHi: if let s = selection { selection = TimeRange(a: s.lo, b: t) }
-                    case .newSelection:
-                        if abs(g.translation.width) > 6 {
-                            selection = TimeRange(a: timeAt(g.startLocation.x, W), b: t); cursorTime = nil
-                        }
-                    case .none: break
-                    }
-                }
-                .onEnded { g in
-                    guard model.hasSound else { return }
-                    if dragMode == .newSelection && abs(g.translation.width) <= 6 {
-                        cursorTime = timeAt(g.location.x, W); selection = nil   // a tap = place cursor
-                    }
-                    dragMode = .none
-                })
+            // [iOS port] Pinch = zoom time; press-and-hold then drag = select (desktop-style);
+            // tap = place cursor; grabbing a cursor/selection edge stays immediate (no hold).
+            // highPriority so these win over the enclosing ScrollView (landscape).
+            .highPriorityGesture(
+                pinchZoom(W).simultaneously(with:
+                    mainDrag(W).simultaneously(with: armSelection(W)))
+            )
+            // a tick of haptic feedback the instant the long-press arms selection
+            .sensoryFeedback(trigger: selectionArmed) { _, armed in armed ? .selection : nil }
         }
+    }
+
+    // MARK: gestures
+
+    private func mainDrag(_ W: Double) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { g in
+                guard model.hasSound, !isPinching else { return }
+                if dragMode == .none {
+                    pressStartX = g.startLocation.x
+                    dragMode = decideMode(startX: g.startLocation.x, W: W)
+                }
+                let t = timeAt(g.location.x, W)
+                switch dragMode {
+                case .moveCursor: cursorTime = t
+                case .resizeLo: if let s = selection { selection = TimeRange(a: t, b: s.hi) }
+                case .resizeHi: if let s = selection { selection = TimeRange(a: s.lo, b: t) }
+                case .newSelection:
+                    if selectionArmed { selection = TimeRange(a: timeAt(pressStartX, W), b: t); cursorTime = nil }
+                case .none: break
+                }
+            }
+            .onEnded { g in
+                defer { dragMode = .none; selectionArmed = false }
+                guard model.hasSound, !isPinching else { return }
+                if dragMode == .newSelection {
+                    if selectionArmed {
+                        // held but never dragged: drop the zero-width selection, place the cursor
+                        if let s = selection, s.hi - s.lo < 0.002 * model.viewSpan {
+                            selection = nil; cursorTime = timeAt(g.location.x, W)
+                        }
+                    } else if abs(g.translation.width) <= 6 {
+                        cursorTime = timeAt(g.location.x, W); selection = nil       // quick tap = cursor
+                    }
+                    // a quick un-held swipe does nothing: selection now requires a hold
+                }
+            }
+    }
+
+    private func armSelection(_ W: Double) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.3, maximumDistance: 30)
+            .onEnded { _ in
+                guard model.hasSound, !isPinching else { return }
+                // A hold always begins a selection — even over the cursor or an edge handle.
+                // (A quick drag there still moves/resizes, since the long-press only fires if
+                // the finger stays put, so immediate manipulation is unaffected.)
+                dragMode = .newSelection
+                selectionArmed = true
+                let t = timeAt(pressStartX, W)
+                selection = TimeRange(a: t, b: t); cursorTime = nil   // show the anchor immediately
+            }
+    }
+
+    private func pinchZoom(_ W: Double) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { v in
+                guard model.hasSound else { return }
+                isPinching = true; dragMode = .none; selectionArmed = false
+                pinchAnchor = v.startAnchor
+                pinchScale = max(0.2, min(v.magnification, 8))
+            }
+            .onEnded { v in
+                defer { pinchScale = 1; isPinching = false }
+                guard model.hasSound else { return }
+                applyZoom(scale: v.magnification, anchorX: Double(v.startAnchor.x))
+            }
+    }
+
+    /// Map a pinch (scale about a horizontal anchor) to a new time window, keeping the
+    /// anchored time fixed on screen. Commit (with history) via onZoom → model.setView.
+    private func applyZoom(scale: CGFloat, anchorX: Double) {
+        guard scale > 0 else { return }
+        let ax = min(max(anchorX, 0), 1)
+        let anchorTime = model.viewStart + ax * model.viewSpan
+        let newSpan = model.viewSpan / Double(scale)
+        let lo = anchorTime - ax * newSpan
+        onZoom(lo, lo + newSpan)
     }
 
     private func timeAt(_ x: Double, _ W: Double) -> Double {

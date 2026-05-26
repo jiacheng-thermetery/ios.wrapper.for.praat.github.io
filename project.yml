@@ -1,0 +1,131 @@
+# XcodeGen spec for Spraak — an unofficial iOS app built on the Praat engine.
+# GPL-3.0-or-later. Generates Spraak.xcodeproj so Xcode (or
+# `xcodebuild -allowProvisioningUpdates`) can build + code-sign the app for a real
+# iPhone — the shell build-app.sh targets the Simulator and does not sign. Engine
+# static libs must already be built for the device slice
+# (PRAAT_IOS_SDK=iphoneos PRAAT_IOS_TARGET=arm64-apple-ios15.0).
+#
+# Build it:
+#   brew install xcodegen
+#   export DEVELOPMENT_TEAM=XXXXXXXXXX   # your 10-char Apple Developer Team ID
+#   xcodegen generate                    # -> Spraak.xcodeproj (git-ignored, regenerable)
+# then open Spraak.xcodeproj, select your iPhone, and Run (Xcode registers the
+# device + provisions the first time). If DEVELOPMENT_TEAM is unset, pick the team
+# in Xcode ▸ target ▸ Signing & Capabilities instead.
+name: Spraak
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  bundleIdPrefix: com.thermetery
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+    CODE_SIGN_STYLE: Automatic
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: "YES"
+    SWIFT_VERSION: "5.0"
+targets:
+  Spraak:
+    type: application
+    platform: iOS
+    sources:
+      - path: ios/app/PraatApp.swift
+      - path: ios/app/ContentView.swift
+      - path: ios/app/PraatModel.swift
+      - path: ios/app/AudioEngine.swift
+      - path: ios/app/SpectrogramView.swift
+      - path: ios/app/SettingsView.swift
+      - path: ios/app/ObjectsView.swift
+      - path: ios/app/CommandForms.swift
+      - path: ios/app/TextGridEditor.swift
+      - path: ios/app/VowelView.swift
+      - path: ios/app/ManipulationView.swift
+      - path: ios/app/ExperimentMFCView.swift
+      - path: ios/app/PraatBridge.mm
+      - path: ios/app/PraatBridge.h
+      - path: ios/pa_ios_hostapis.c
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thermetery.spraak
+        PRODUCT_NAME: Spraak
+        INFOPLIST_FILE: ios/app/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        SWIFT_OBJC_BRIDGING_HEADER: ios/app/Spraak-Bridging-Header.h
+        CLANG_CXX_LANGUAGE_STANDARD: "gnu++17"
+        # PraatBridge.h is a clean C interface (no Praat headers), so the Swift
+        # Clang importer needs no Praat paths here — only the bridging header dir.
+        # The Praat dirs go to the C/C++ compiles via -iquote below, NOT here:
+        # HEADER_SEARCH_PATHS feeds the Swift importer too, and a target-wide -I
+        # makes a system header's `#include <complex.h>` resolve to Praat's
+        # melder/complex.h, which breaks every SDK module. Praat uses quoted
+        # includes, so -iquote (searched only for "...") is the correct scope.
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/ios/app
+        # C++/ObjC++ only (PraatBridge.mm): Praat defines + quoted-include dirs.
+        OTHER_CPLUSPLUSFLAGS:
+          - -Dmacintosh
+          - -DPRAAT_IOS
+          - -DNO_GRAPHICS
+          - -DPRAAT_IOS_GRAPHICS
+          - -iquote$(SRCROOT)/sys
+          - -iquote$(SRCROOT)/melder
+          - -iquote$(SRCROOT)/kar
+          - -iquote$(SRCROOT)/fon
+          - -iquote$(SRCROOT)/dwsys
+          - -iquote$(SRCROOT)/stat
+          - -iquote$(SRCROOT)/LPC
+          - -iquote$(SRCROOT)/gram
+          - -iquote$(SRCROOT)/dwtools
+          - -iquote$(SRCROOT)/external/gsl
+        # C only (pa_ios_hostapis.c includes "pa_hostapi.h").
+        OTHER_CFLAGS:
+          - -iquote$(SRCROOT)/external/portaudio
+        # Static engine libs, in the upstream link order (fon appears twice on purpose).
+        OTHER_LDFLAGS:
+          - $(SRCROOT)/fon/libfon.a
+          - $(SRCROOT)/artsynth/libartsynth.a
+          - $(SRCROOT)/FFNet/libFFNet.a
+          - $(SRCROOT)/gram/libgram.a
+          - $(SRCROOT)/EEG/libEEG.a
+          - $(SRCROOT)/LPC/libLPC.a
+          - $(SRCROOT)/dwtools/libdwtools.a
+          - $(SRCROOT)/sensors/libsensors.a
+          - $(SRCROOT)/foned/libfoned.a
+          - $(SRCROOT)/fon/libfon.a
+          - $(SRCROOT)/stat/libstat.a
+          - $(SRCROOT)/dwsys/libdwsys.a
+          - $(SRCROOT)/sys/libsys.a
+          - $(SRCROOT)/melder/libmelder.a
+          - $(SRCROOT)/kar/libkar.a
+          - $(SRCROOT)/external/espeak/libespeak.a
+          - $(SRCROOT)/external/portaudio/libportaudio.a
+          - $(SRCROOT)/external/flac/libflac.a
+          - $(SRCROOT)/external/lame/liblame.a
+          - $(SRCROOT)/external/mp3/libmp3.a
+          - $(SRCROOT)/external/glpk/libglpk.a
+          - $(SRCROOT)/external/clapack/libclapack.a
+          - $(SRCROOT)/external/gsl/libgsl.a
+          - $(SRCROOT)/external/num/libnum.a
+          - $(SRCROOT)/external/vorbis/libvorbis.a
+          - $(SRCROOT)/external/opusfile/libopusfile.a
+          - $(SRCROOT)/external/whispercpp/libwhisper.a
+          - -lc++
+          - -lm
+    dependencies:
+      - sdk: CoreFoundation.framework
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: Foundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: ImageIO.framework
+      - sdk: AVFoundation.framework
+      - sdk: MobileCoreServices.framework
+schemes:
+  Spraak:
+    build:
+      targets:
+        Spraak: all
+    run:
+      config: Debug

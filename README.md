@@ -1,9 +1,11 @@
-# Spraak — *unofficial* derivative
+# Spraak — an *unofficial* iOS app built on Praat
 
-**This is a modified version of Praat, not the original.** It is an **unofficial** iOS port and is
-**not produced, reviewed, or endorsed by Paul Boersma, David Weenink, or the University of Amsterdam.**
+**This is a modified version of Praat, not the original.** "Spraak" is this port's own name (Dutch
+for "speech"); it is an **unofficial** iOS derivative and is **not produced, reviewed, or endorsed by
+Paul Boersma, David Weenink, or the University of Amsterdam.** "Praat" is used here only descriptively,
+to say what engine Spraak runs.
 
-It cross-compiles Praat's analysis + scripting engine for iOS (arm64) and adds a SwiftUI front end:
+**Spraak** cross-compiles Praat's analysis + scripting engine for iOS (arm64) and adds a SwiftUI front end:
 record/analyze with a live spectrogram and pitch/formant/intensity overlays, a native **Objects**
 window over the live interpreter, eSpeak text-to-speech, and TextGrid / Manipulation (PSOLA) / Vowel /
 ExperimentMFC editors plus a script console. Almost everything new lives in the [`ios/`](ios/)
@@ -15,6 +17,17 @@ Graphics drawing path). For details, build instructions, and the change record s
 - [`ios/LICENSING.md`](ios/LICENSING.md) — license audit & GPL-compliance plan
 - [`ios/FEATURES_ROADMAP.md`](ios/FEATURES_ROADMAP.md) — feature status
 
+## Why you build it yourself — not the App Store
+
+**This app can't be shipped on the Apple App Store**, and that shapes everything below. The GPL is
+incompatible with the App Store Terms of Service (the DRM, device limits, and installation
+restrictions the GPL forbids), and Praat has multiple copyright holders, so no one can grant an
+App-Store exception. That isn't a shortcoming of this port — it's the flip side of Praat being free
+software: instead of tapping *Install*, you get the **source** and run it by **building it yourself**
+or **sideloading** onto your own device. So the rest of this README is the build: a Simulator path
+that needs no signing, and a real-device path that you sign with your own Apple ID. (Full reasoning:
+[`ios/LICENSING.md`](ios/LICENSING.md) §4.)
+
 ## Installation
 
 > **New to building iOS apps?** This setup — Xcode, the cross-compile toolchain, and (for a real
@@ -23,7 +36,7 @@ Graphics drawing path). For details, build instructions, and the change record s
 > set up the environment with you, step by step, for your machine. For example, try the prompt below:
 
 ```
-I'd like to install `github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io` onto my iPhone. It is basically an iOS wrapper for the phonetic analysis software Praat. I am new to compiling, sideloading, signging apps, and this whole installation process. Would you please walk me through step by step for this installation? 
+I'd like to install `github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io` onto my iPhone. It is basically an iOS wrapper for the phonetic analysis software Praat. I am new to compiling, sideloading, signing apps, and this whole installation process. Would you please walk me through step by step for this installation? 
 ```
 
 Requires [Xcode](https://developer.apple.com/xcode/) with the iOS SDK. All commands run from the
@@ -47,7 +60,7 @@ set `DEVELOPER_DIR` to override (e.g. `export DEVELOPER_DIR=/path/to/Xcode.app/C
 ### Running on a real iPhone (signing & sideloading)
 
 iOS will not launch an app on a physical device unless it is **code-signed** — only the Simulator
-runs unsigned builds. Because the GPL keeps this off the App Store (see below), the way onto a
+runs unsigned builds. Because the GPL keeps this off the App Store (see above), the way onto a
 device is to **sign it yourself**, which is free and fully supported.
 
 **For your own phone, just sign it — there are no GPL strings attached** (personal use isn't
@@ -66,14 +79,36 @@ device is to **sign it yourself**, which is free and fully supported.
 > convenience — a developer account whose signing certificate lasts a year instead of the free
 > account's 7 days. The **free Apple ID path costs $0** and is enough to run the app.
 
-**Steps.** Build the engine libs for device arm64 (`PRAAT_IOS_SDK=iphoneos
-PRAAT_IOS_TARGET=arm64-apple-ios15.0 source ios/iosenv.sh`, then `make` each lib as above). The
-repo's `build-app.sh` targets the **Simulator**; for a device the simplest signer is **Xcode** —
-add the `ios/app` sources to a target, set *Signing & Capabilities → Team* = your Apple ID and a
-unique bundle id (e.g. `com.YOURNAME.praat-ios`), select your connected iPhone, and **Run**. Then
-on the phone: *Settings → General → VPN & Device Management → your profile → Trust*. (You can
-instead `codesign` the built `.app` with a manual provisioning profile and install via
-`ios-deploy` / Apple Configurator — Xcode is just far less fiddly.)
+**Steps.** The repo's `build-app.sh` targets the **Simulator** and doesn't sign; for a real device
+use the generated Xcode project (`project.yml`, [XcodeGen](https://github.com/yonaskolb/XcodeGen)):
+
+```sh
+# 1. Build the engine static libs for the device slice (arm64, iphoneos):
+export PRAAT_IOS_SDK=iphoneos PRAAT_IOS_TARGET=arm64-apple-ios15.0
+source ios/iosenv.sh
+for d in kar melder sys dwsys stat fon foned LPC dwtools gram FFNet EEG artsynth sensors; do make -B -C $d; done
+for d in num clapack gsl glpk lame mp3 flac vorbis opusfile espeak portaudio whispercpp; do make -B -C external/$d; done
+
+# 2. Generate Spraak.xcodeproj (compiles the SwiftUI app + C++ bridge, links the libs):
+brew install xcodegen
+export DEVELOPMENT_TEAM=XXXXXXXXXX        # your 10-char Apple Developer Team ID (or set it in Xcode)
+xcodegen generate
+```
+
+Then **enable Developer Mode on the iPhone** (*Settings → Privacy & Security → Developer Mode* → on
+→ restart), `open Spraak.xcodeproj`, select your connected iPhone as the run destination, and
+**Run** (⌘R). With automatic signing, Xcode registers the device with your team, provisions, signs,
+installs, and launches. The first launch is blocked as an untrusted developer until you trust it on
+the phone: *Settings → General → VPN & Device Management → your profile → Trust*.
+
+> **Note (`-iquote`):** Praat ships `melder/complex.h`, which shadows the C library's `<complex.h>`
+> if Praat's dirs are on a plain `-I` path that the Swift Clang importer also sees — that breaks
+> every system module. `project.yml` therefore passes the Praat dirs via `-iquote` (quoted-include
+> only) on the C++ compile, never via the target-wide header search paths. Don't "simplify" that.
+
+(A free Apple ID works too — leave `DEVELOPMENT_TEAM` unset and pick your personal team in Xcode ▸
+target ▸ *Signing & Capabilities*; signatures then expire after 7 days. Or `codesign` the built
+`.app` manually and install via `xcrun devicectl device install app` — Xcode is just far less fiddly.)
 
 **Sharing with other people — share the source, not your signed binary.** Free-account signatures
 expire in 7 days, ad-hoc distribution caps at 100 registered devices/year, and **Enterprise**
@@ -85,18 +120,13 @@ automate exactly that (on-device re-signing with the user's Apple ID, and auto-r
 private signing key — GPLv3's "Installation Information" here is simply *the source plus these
 instructions*.
 
-## Distribution & the App Store
+## License
 
-**This app cannot be distributed through the Apple App Store.** The GPL is incompatible with
-the App Store Terms of Service (DRM / device limits / installation restrictions), and Praat has
-multiple copyright holders, so no third party can grant an App-Store exception. Distribute it as
-**source**, and run it by **building it yourself** or **sideloading** (e.g. a free-account 7-day
-signed build, or AltStore/SideStore). See [`ios/LICENSING.md`](ios/LICENSING.md) §4.
-
-**License:** free software under **GPL-3.0-or-later**, exactly like upstream Praat, and distributed
-WITHOUT ANY WARRANTY. Modifications for the iOS port were made in 2024–2026 by the port's contributors.
-Because the GPL is incompatible with the Apple App Store Terms of Service, **this build cannot be
-distributed via the App Store** — use it by building from source or sideloading.
+**Free software under GPL-3.0-or-later**, exactly like upstream Praat, and distributed WITHOUT ANY
+WARRANTY. Modifications for the iOS port were made in 2024–2026 by the port's contributors. As
+explained at the top, the GPL is precisely what keeps this off the App Store — so distribute it as
+**source** (or a self-signed sideload onto your own device), never as a signed binary. See
+[`ios/LICENSING.md`](ios/LICENSING.md) §4.
 
 Upstream Praat: <https://github.com/praat/praat> · <https://praat.org>
 
