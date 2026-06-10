@@ -394,6 +394,30 @@ class PraatViewModel : ViewModel() {
     }
 
     /**
+     * [Android port] Mirror the Analyze tab's TextGrid annotation into the engine object
+     * list (one shared engine, like addSoundObject does for sounds): write the grid text
+     * to a temp file, Read it, Rename it, replacing any previous synced grid of the same
+     * name. Selection is preserved so a sync never disturbs what the user selected.
+     */
+    suspend fun syncTextGridToObjects(gridText: String, objName: String, cacheDir: java.io.File) {
+        runCatching {
+            val file = java.io.File(cacheDir, "$objName.TextGrid")
+            withContext(Dispatchers.IO) { file.writeText(gridText) }
+            val before = refreshObjects()
+            val selectedIds = before.filter { it.selected }.map { it.id }
+            val stale = before.filter {
+                it.className == "TextGrid" && it.name.substringAfter(' ') == objName
+            }.map { it.id }
+            if (stale.isNotEmpty()) runScript("removeObject: " + stale.joinToString(", "))
+            runScript(
+                "Read from file: \"${file.absolutePath.replace("\\", "/")}\"\n" +
+                "Rename: \"$objName\""
+            )
+            selectObjects(selectedIds.filterNot { it in stale })
+        }
+    }
+
+    /**
      * Synthesize speech with eSpeak and load it into the Analyze tab (port of AnalyzeView.speak).
      * [Android port] PCM is pulled straight out of the engine object instead of a temp WAV.
      */

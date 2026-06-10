@@ -135,12 +135,19 @@ fun VowelScreen(vm: PraatViewModel) {
         track = if (!showTrack || !vm.hasSound || vm.audio.isRecording) emptyList() else {
             val n = 300
             val dur = vm.duration
-            val (c1, c2) = vm.engine {
-                Pair(PraatEngine.curve(PraatViewModel.KIND_FORMANT1, 0.0, dur, n),
-                     PraatEngine.curve(PraatViewModel.KIND_FORMANT1 + 1, 0.0, dur, n))
+            // Fetch pitch too: Burg returns in-range garbage F1/F2 for unvoiced frames and
+            // silence, so only voiced frames belong in the vowel space (Praat speckles
+            // formants for the same reason).
+            val (c1, c2, pitch) = vm.engine {
+                Triple(PraatEngine.curve(PraatViewModel.KIND_FORMANT1, 0.0, dur, n),
+                       PraatEngine.curve(PraatViewModel.KIND_FORMANT1 + 1, 0.0, dur, n),
+                       PraatEngine.curve(PraatViewModel.KIND_PITCH, 0.0, dur, n))
             }
             if (c1 == null || c2 == null) emptyList()
-            else (0 until minOf(c1.size, c2.size)).map { Pair(c1[it].toDouble(), c2[it].toDouble()) }
+            else (0 until minOf(c1.size, c2.size)).mapNotNull { i ->
+                val voiced = pitch != null && i < pitch.size && pitch[i].isFinite()
+                if (voiced) Pair(c1[i].toDouble(), c2[i].toDouble()) else null
+            }
         }
     }
 
@@ -186,19 +193,15 @@ fun VowelScreen(vm: PraatViewModel) {
                     (w * (F2_HI - vf2) / (F2_HI - F2_LO)).toFloat(),
                     (h * (vf1 - F1_LO) / (F1_HI - F1_LO)).toFloat(),
                 )
-                // measured F1/F2 track of the current sound (skip unvoiced/off-scale frames)
-                if (track.isNotEmpty()) {
-                    val path = Path()
-                    var pen = false
-                    for ((tf1, tf2) in track) {
-                        val ok = tf1.isFinite() && tf2.isFinite() &&
-                            tf1 in F1_LO..F1_HI && tf2 in F2_LO..F2_HI
-                        if (!ok) { pen = false; continue }
-                        val p = pos(tf1, tf2)
-                        if (pen) path.lineTo(p.x, p.y) else { path.moveTo(p.x, p.y); pen = true }
-                    }
-                    drawPath(path, Color(0xFF1E66C8).copy(alpha = 0.45f),
-                        style = Stroke(width = 2.dp.toPx()))
+                // measured F1/F2 of the current sound, voiced frames only, drawn as
+                // speckles like Praat — connecting lines turned silences/transitions
+                // into spaghetti across the whole vowel space.
+                for ((tf1, tf2) in track) {
+                    val ok = tf1.isFinite() && tf2.isFinite() &&
+                        tf1 in F1_LO..F1_HI && tf2 in F2_LO..F2_HI
+                    if (!ok) continue
+                    drawCircle(Color(0xFF1E66C8).copy(alpha = 0.55f),
+                        radius = 2.5.dp.toPx(), center = pos(tf1, tf2))
                 }
                 // reference vowels
                 val refStyle = TextStyle(fontSize = 15.sp, color = Color.Gray)

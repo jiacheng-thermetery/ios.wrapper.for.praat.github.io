@@ -3,8 +3,11 @@
 // kept around the tiers. GPL-3.0-or-later. UNOFFICIAL modified version of Praat.
 //
 // Multi-tier TextGrid annotation: stacked interval/point tiers aligned to the visible window.
-// Tap a tier to add a boundary/point at that time; tap an existing mark to select it (edit its
-// label / delete it in the editor row); export everything as a Praat .TextGrid.
+// LONG-PRESS a tier to add a boundary/point at that time; TAP to select the interval under the
+// finger (or the nearest point) and edit its label / delete it in the editor row. Interval
+// tiers carry a label mark at t=0 so the first interval is editable like any other. Edits are
+// mirrored into the engine object list (debounced) as "<sound>_grid", and exportable as a
+// Praat .TextGrid.
 package com.thermetery.spraak
 
 import android.content.Context
@@ -49,8 +52,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -91,19 +96,29 @@ private object TextGridState {
     var soundKey: String? = null
     var tiers by mutableStateOf(defaultTiers())
     var selected by mutableStateOf<TGMarkRef?>(null)
+    var lastSyncedKey: String? = null   // sound key whose grid was mirrored to the engine
 
-    fun defaultTiers() = listOf(
-        TGTier(name = "phones", isInterval = true),
-        TGTier(name = "words", isInterval = true),
-    )
+    // Interval tiers start with a label carrier at t=0: TGMark(time) labels the interval
+    // starting at `time`, so without it the FIRST interval could never be edited.
+    // TextGridIO already understands it (filtered from boundaries, matched as the first
+    // interval's label).
+    fun newIntervalTier(name: String) =
+        TGTier(name = name, isInterval = true, marks = listOf(TGMark(time = 0.0)))
+
+    fun defaultTiers() = listOf(newIntervalTier("phones"), newIntervalTier("words"))
 
     fun resetFor(key: String) {
         if (key == soundKey) return
         soundKey = key
         tiers = defaultTiers()
         selected = null
+        lastSyncedKey = null
     }
 }
+
+/** True if the user actually annotated something (the t=0 carriers alone don't count). */
+private fun List<TGTier>.hasAnnotation() =
+    any { t -> t.marks.any { it.time > 1e-9 || it.label.isNotEmpty() } }
 
 /**
  * The TextGrid annotation block of the Analyze screen: waveform strip, tier controls,
@@ -119,12 +134,26 @@ fun TextGridEditor(vm: PraatViewModel) {
     val selected = TextGridState.selected
     val context = LocalContext.current
 
+    // [Android port] Mirror the annotation into the engine object list ("one shared
+    // engine", like sounds): debounced so typing a label syncs once, not per keystroke.
+    LaunchedEffect(tiers) {
+        val meaningful = tiers.hasAnnotation()
+        if (!meaningful && TextGridState.lastSyncedKey != soundKey) return@LaunchedEffect
+        kotlinx.coroutines.delay(700)
+        TextGridState.lastSyncedKey = soundKey
+        vm.syncTextGridToObjects(
+            TextGridIO.textGrid(tiers, 0.0, vm.duration),
+            gridObjectName(vm.soundName),
+            context.cacheDir,
+        )
+    }
+
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         WaveformStrip(vm)
         TierControls(
-            anyMarks = tiers.any { it.marks.isNotEmpty() },
+            anyMarks = tiers.hasAnnotation(),
             onAddInterval = {
-                TextGridState.tiers = tiers + TGTier(name = "tier${tiers.size + 1}", isInterval = true)
+                TextGridState.tiers = tiers + TextGridState.newIntervalTier("tier${tiers.size + 1}")
             },
             onAddPoint = {
                 TextGridState.tiers = tiers + TGTier(name = "points${tiers.size + 1}", isInterval = false)
@@ -245,6 +274,7 @@ private fun TierRow(
 ) {
     val span = max(viewEnd - viewStart, 1e-6)
     val measurer = rememberTextMeasurer()
+    val haptics = LocalHapticFeedback.current
     val labelStyle = TextStyle(fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
     val selColor = MaterialTheme.colorScheme.primary                // iOS .blue
     val intervalColor = MaterialTheme.colorScheme.outline           // iOS .gray
@@ -270,56 +300,89 @@ private fun TierRow(
                 .clip(RoundedCornerShape(3.dp))
                 .background(bg)
                 .border(1.dp, borderColor, RoundedCornerShape(3.dp))
-                // keyed on the tier value itself so the handler never captures stale marks
+                // keyed on the tier value itself so the handler never captures stale marks.
+                // Long-press = add boundary/point; tap = select what's under the finger
+                // (the containing interval, or the nearest point) for editing.
                 .pointerInput(tier, viewStart, viewEnd) {
-                    detectTapGestures { pos ->
+                    fun timeAt(pos: Offset): Double {
                         val w = size.width.toFloat()
-                        if (w <= 0f) return@detectTapGestures
-                        val t = (viewStart + (pos.x / w) * span).coerceIn(viewStart, viewEnd)
-                        val hit = tier.marks.minByOrNull { abs(it.time - t) }
-                        if (hit != null && abs(hit.time - t) / span * w < 12.dp.toPx()) {
-                            onSelect(TGMarkRef(tier.id, hit.id))
-                        } else {
-                            val m = TGMark(time = t)
+                        return (viewStart + (pos.x / w) * span).coerceIn(viewStart, viewEnd)
+                    }
+                    detectTapGestures(
+                        onTap = { pos ->
+                            if (size.width <= 0) return@detectTapGestures
+                            val t = timeAt(pos)
+                            if (tier.isInterval) {
+                                // the interval containing t starts at the latest mark <= t
+                                // (the t=0 carrier guarantees the first interval has one)
+                                val container = tier.marks.filter { it.time <= t }
+                                    .maxByOrNull { it.time }
+                                onSelect(container?.let { TGMarkRef(tier.id, it.id) })
+                            } else {
+                                val hit = tier.marks.minByOrNull { abs(it.time - t) }
+                                val nearPx = hit?.let { abs(it.time - t) / span * size.width } ?: Double.MAX_VALUE.toDouble()
+                                onSelect(if (nearPx < 16.dp.toPx()) TGMarkRef(tier.id, hit!!.id) else null)
+                            }
+                        },
+                        onLongPress = { pos ->
+                            if (size.width <= 0) return@detectTapGestures
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val m = TGMark(time = timeAt(pos))
                             onChange(tier.copy(marks = tier.marks + m))
                             onSelect(TGMarkRef(tier.id, m.id))
-                        }
-                    }
+                        },
+                    )
                 },
         ) {
             val w = size.width
             val h = size.height
             val marks = tier.marks.sortedBy { it.time }
             marks.forEachIndexed { i, m ->
-                if (m.time < viewStart || m.time > viewEnd) return@forEachIndexed
-                val x = (w * (m.time - viewStart) / span).toFloat()
                 val isSel = selected == TGMarkRef(tier.id, m.id)
-                drawLine(
-                    color = if (isSel) selColor else if (tier.isInterval) intervalColor else pointColor,
-                    start = Offset(x, 0f),
-                    end = Offset(x, h),
-                    strokeWidth = if (isSel) 2.dp.toPx() else 1.dp.toPx(),
-                )
                 if (tier.isInterval) {
-                    // label the interval starting at this boundary, centred up to the next one
+                    // interval [m.time, next): highlight when selected, label centred over
+                    // the visible part; the t=0 carrier draws no boundary line.
+                    val next = if (i + 1 < marks.size) marks[i + 1].time else Double.MAX_VALUE
+                    val a = max(m.time, viewStart)
+                    val b = min(next, viewEnd)
+                    if (b > a) {
+                        val x0 = (w * (a - viewStart) / span).toFloat()
+                        val x1 = (w * (b - viewStart) / span).toFloat()
+                        if (isSel)
+                            drawRect(selColor.copy(alpha = 0.12f),
+                                topLeft = Offset(x0, 0f), size = Size(x1 - x0, h))
+                        if (m.label.isNotEmpty()) {
+                            val layout = measurer.measure(AnnotatedString(m.label), labelStyle)
+                            drawText(layout, topLeft = Offset((x0 + x1) / 2f - layout.size.width / 2f,
+                                h / 2f - layout.size.height / 2f))
+                        }
+                    }
+                    if (m.time > 1e-9 && m.time in viewStart..viewEnd) {
+                        val x = (w * (m.time - viewStart) / span).toFloat()
+                        drawLine(
+                            color = if (isSel) selColor else intervalColor,
+                            start = Offset(x, 0f), end = Offset(x, h),
+                            strokeWidth = if (isSel) 2.dp.toPx() else 1.dp.toPx(),
+                        )
+                    }
+                } else {
+                    if (m.time < viewStart || m.time > viewEnd) return@forEachIndexed
+                    val x = (w * (m.time - viewStart) / span).toFloat()
+                    drawLine(
+                        color = if (isSel) selColor else pointColor,
+                        start = Offset(x, 0f), end = Offset(x, h),
+                        strokeWidth = if (isSel) 2.dp.toPx() else 1.dp.toPx(),
+                    )
                     if (m.label.isNotEmpty()) {
-                        val next = if (i + 1 < marks.size) marks[i + 1].time else viewEnd
-                        val midX = (w * ((m.time + min(next, viewEnd)) / 2 - viewStart) / span).toFloat()
                         val layout = measurer.measure(AnnotatedString(m.label), labelStyle)
                         drawText(
                             layout,
-                            topLeft = Offset(midX - layout.size.width / 2f, h / 2f - layout.size.height / 2f),
+                            topLeft = Offset(
+                                x - layout.size.width / 2f,
+                                h / 2f - 8.dp.toPx() - layout.size.height / 2f,   // iOS: y = H/2 - 8
+                            ),
                         )
                     }
-                } else if (m.label.isNotEmpty()) {
-                    val layout = measurer.measure(AnnotatedString(m.label), labelStyle)
-                    drawText(
-                        layout,
-                        topLeft = Offset(
-                            x - layout.size.width / 2f,
-                            h / 2f - 8.dp.toPx() - layout.size.height / 2f,   // iOS: y = H/2 - 8
-                        ),
-                    )
                 }
             }
         }
@@ -360,8 +423,15 @@ private fun MarkEditor(tiers: List<TGTier>, selected: TGMarkRef?) {
             ),
         )
         IconButton(onClick = {
+            // The first interval's t=0 label carrier has no boundary to remove:
+            // deleting it just clears the label.
+            val isCarrier = tier.isInterval && mark.time <= 1e-9
             TextGridState.tiers = tiers.map { t ->
-                if (t.id != tier.id) t else t.copy(marks = t.marks.filterNot { it.id == mark.id })
+                if (t.id != tier.id) t
+                else if (isCarrier) t.copy(marks = t.marks.map {
+                    if (it.id == mark.id) it.copy(label = "") else it
+                })
+                else t.copy(marks = t.marks.filterNot { it.id == mark.id })
             }
             TextGridState.selected = null
         }) {
@@ -386,6 +456,10 @@ private fun exportTextGrid(context: Context, tiers: List<TGTier>, duration: Doub
 }
 
 private fun fmt3(t: Double): String = String.format(Locale.US, "%.3f", t)
+
+/** Engine object name for the mirrored grid (Praat object names dislike punctuation). */
+private fun gridObjectName(soundName: String): String =
+    soundName.replace(Regex("[^A-Za-z0-9_-]"), "_") + "_grid"
 
 /** Port of TextGridIO: generate Praat .TextGrid (ooTextFile) text. */
 object TextGridIO {
