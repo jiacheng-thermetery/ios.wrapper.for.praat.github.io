@@ -10,6 +10,7 @@
  */
 #include <jni.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 #include "../../ios/app/PraatBridge.h"
@@ -83,6 +84,15 @@ extern "C" {
 #define FN(name) JNIEXPORT JNICALL Java_com_thermetery_spraak_PraatEngine_##name
 
 /* --- lifecycle / scripting --- */
+
+/* [Android port] iOS apps always have HOME pointing at the app sandbox; Android app
+ * processes have no usable HOME/TMPDIR, and Praat's UNIX paths (preferences folder,
+ * PID file, ~-expansion) build on them. MainActivity points them at filesDir/cacheDir
+ * before the first engine call. */
+void FN(setEnv) (JNIEnv *env, jobject, jstring name, jstring value) {
+	const std::string n = jstringToUtf8 (env, name), v = jstringToUtf8 (env, value);
+	setenv (n.c_str (), v.c_str (), 1);
+}
 
 void FN(init) (JNIEnv *, jobject) {
 	praatios_init ();

@@ -15,6 +15,7 @@ object PraatEngine {
     }
 
     /* lifecycle / scripting console */
+    external fun setEnv(name: String, value: String)   // [Android port] HOME/TMPDIR before init
     external fun init()
     external fun runScript(script: String): String
 

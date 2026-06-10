@@ -15,7 +15,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        ndk { abiFilters += "arm64-v8a" }   // libpraat.so staged by android/build-bridge.sh
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }   // libpraat.so staged by android/build-bridge.sh
     }
 
     buildTypes {

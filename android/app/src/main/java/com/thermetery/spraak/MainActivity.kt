@@ -26,6 +26,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // [Android port] Praat's UNIX paths (preferences, PID file, ~) need a writable
+        // HOME; iOS got this from the OS. Must run before the view model inits the engine.
+        PraatEngine.setEnv("HOME", filesDir.absolutePath)
+        PraatEngine.setEnv("TMPDIR", cacheDir.absolutePath)
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
