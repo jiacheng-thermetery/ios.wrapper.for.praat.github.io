@@ -54,12 +54,15 @@ struct AnalyzeView: View {
 
     @State private var samples: [Float] = []
     @State private var rate: Double = 16000
+    @State private var soundName = "sound"   // [iOS port] names the synced "<sound>_grid" object
     @State private var cursorTime: Double?
     @State private var selection: TimeRange?
     @State private var slice: PraatModel.Slice?
-    @State private var tiers: [TGTier] = [TGTier(name: "phones", isInterval: true),
-                                          TGTier(name: "words", isInterval: true)]
+    // [iOS port] interval tiers start with a t=0 label carrier (see TextGridEditor.swift)
+    @State private var tiers: [TGTier] = [.interval(named: "phones"), .interval(named: "words")]
     @State private var selectedMark: TGMarkRef?
+    @State private var gridSyncTask: Task<Void, Never>?   // [iOS port] debounced grid → engine sync
+    @State private var gridSynced = false                 // a grid for this sound exists in the engine
     @State private var zoomHistory: [TimeRange] = []
     @State private var cursorValues: PraatModel.CursorValues?
 
@@ -131,6 +134,8 @@ struct AnalyzeView: View {
         .onChange(of: store.analyzeRequest) { _, req in
             if let req { loadFromObjects(req) }
         }
+        // [iOS port] every annotation edit (re)arms the debounced engine sync
+        .onChange(of: tiers) { _, _ in scheduleGridSync() }
         .sheet(isPresented: $showZoomDialog) {
             TimeRangeDialog(title: "Zoom", actionLabel: "Zoom", from: $dlgFrom, to: $dlgTo) { a, b in
                 pushZoom(); model.setView(a, b)
@@ -276,13 +281,13 @@ struct AnalyzeView: View {
     private var tierControls: some View {
         HStack(spacing: 8) {
             Text("Tiers").font(.caption2).foregroundStyle(.secondary)
-            Button { tiers.append(TGTier(name: "tier\(tiers.count + 1)", isInterval: true)) }
+            Button { tiers.append(.interval(named: "tier\(tiers.count + 1)")) }   // [iOS port] t=0 carrier
                 label: { Label("Interval", systemImage: "plus") }
             Button { tiers.append(TGTier(name: "points\(tiers.count + 1)", isInterval: false)) }
                 label: { Label("Point", systemImage: "plus") }
             Spacer()
             Button { exportTextGrid() } label: { Label("TextGrid", systemImage: "square.and.arrow.up") }
-                .disabled(tiers.allSatisfy { $0.marks.isEmpty })
+                .disabled(!tiers.hasAnnotation)   // [iOS port] the t=0 carriers alone don't count
         }
         .buttonStyle(.bordered).controlSize(.mini).font(.caption2)
     }
@@ -297,7 +302,16 @@ struct AnalyzeView: View {
                 TextField("label", text: $tiers[ti].marks[mi].label)
                     .textFieldStyle(.roundedBorder).font(.callout)
                     .autocorrectionDisabled().textInputAutocapitalization(.never)
-                Button(role: .destructive) { tiers[ti].marks.remove(at: mi); selectedMark = nil }
+                Button(role: .destructive) {
+                    // [iOS port] the first interval's t=0 label carrier has no boundary to
+                    // remove: "deleting" it just clears its label.
+                    if tiers[ti].isInterval && tiers[ti].marks[mi].time <= 1e-9 {
+                        tiers[ti].marks[mi].label = ""
+                    } else {
+                        tiers[ti].marks.remove(at: mi)
+                    }
+                    selectedMark = nil
+                }
                     label: { Image(systemName: "trash") }
             }
         }
@@ -308,7 +322,7 @@ struct AnalyzeView: View {
     /// Load PCM into the Analyze view. If `pushToObjects`, also add it to the engine object
     /// list so it appears in the Objects window (the two tabs share one engine).
     private func setAnalysisSound(_ s: [Float], _ r: Double, name: String, pushToObjects: Bool) {
-        samples = s; rate = r; resetAnalysis(); model.setSamples(s, rate: r)
+        samples = s; rate = r; soundName = name; resetAnalysis(); model.setSamples(s, rate: r)
         if pushToObjects {
             _ = s.withUnsafeBufferPointer { praatios_addSoundObject($0.baseAddress, Int32(s.count), r, name) }
         }
@@ -339,6 +353,61 @@ struct AnalyzeView: View {
         pictureExport = ExportItem(url: url)   // reuse the share sheet
     }
 
+    /// [iOS port] Debounce annotation edits, then mirror the grid into the engine object list
+    /// ("one shared engine", like addSoundObject does for sounds): typing a label syncs once,
+    /// not per keystroke. Untouched default grids are not pushed; once a grid has been synced
+    /// it keeps mirroring, so deletions propagate too.
+    private func scheduleGridSync() {
+        gridSyncTask?.cancel()
+        guard model.hasSound, tiers.hasAnnotation || gridSynced else { return }
+        gridSyncTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            gridSynced = true
+            syncTextGridToObjects()
+        }
+    }
+
+    /// [iOS port] Mirror the tiers into the engine as TextGrid "<sound>_grid", replacing any
+    /// previous synced grid of that name: write the .TextGrid text to a temp file, Read +
+    /// Rename it, and restore the user's selection so a sync never disturbs what they selected.
+    /// (Runs the engine on the main actor, like the rest of this view.)
+    private func syncTextGridToObjects() {
+        let objName = gridObjectName(soundName)
+        let text = TextGridIO.textGrid(tiers: tiers, xmin: 0, xmax: model.duration)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(objName).TextGrid")
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+
+        // remember the selection and find stale synced grids; objectInfo's name field is
+        // "ClassName givenName", so match the part after the class name too
+        var selectedIds: [Int] = [], staleIds: [Int] = []
+        let n = Int(praatios_objectCount())
+        if n > 0 {
+            for i in 1...n {
+                let parts = String(cString: praatios_objectInfo(Int32(i))).components(separatedBy: "|")
+                guard parts.count >= 4, let id = Int(parts[0]) else { continue }
+                if parts[3] == "1" { selectedIds.append(id) }
+                if parts[1] == "TextGrid", parts[2] == objName || parts[2].hasSuffix(" " + objName) {
+                    staleIds.append(id)
+                }
+            }
+        }
+        var script = ""
+        if !staleIds.isEmpty {
+            script += "removeObject: " + staleIds.map(String.init).joined(separator: ", ") + "\n"
+        }
+        script += "Read from file: \"\(url.path)\"\nRename: \"\(objName)\"\n"
+        let keep = selectedIds.filter { !staleIds.contains($0) }
+        script += keep.isEmpty ? "selectObject()"
+                               : "selectObject: " + keep.map(String.init).joined(separator: ", ")
+        _ = String(cString: praatios_run(script))
+    }
+
+    /// [iOS port] Engine object name for the mirrored grid (Praat object names dislike punctuation).
+    private func gridObjectName(_ name: String) -> String {
+        name.replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "_", options: .regularExpression) + "_grid"
+    }
+
     /// Synthesize speech with eSpeak (via the engine), then load it into the Analyze view.
     private func speak() {
         let safe = speakText.replacingOccurrences(of: "\"", with: "\"\"")
@@ -360,7 +429,8 @@ struct AnalyzeView: View {
     }
     private func resetAnalysis() {
         cursorTime = nil; selection = nil; slice = nil; zoomHistory = []
-        tiers = [TGTier(name: "phones", isInterval: true), TGTier(name: "words", isInterval: true)]
+        gridSyncTask?.cancel(); gridSyncTask = nil; gridSynced = false   // [iOS port]
+        tiers = [.interval(named: "phones"), .interval(named: "words")]  // [iOS port] t=0 carriers
         selectedMark = nil
     }
 
