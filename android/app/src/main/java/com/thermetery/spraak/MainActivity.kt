@@ -68,6 +68,28 @@ class MainActivity : ComponentActivity() {
         PraatEngine.setEnv("HOME", filesDir.absolutePath)
         PraatEngine.setEnv("TMPDIR", cacheDir.absolutePath)
 
+        // Construct the view model HERE, not lazily inside composition: if its
+        // constructor throws, composition never starts and no crash UI could show
+        // (that masked the 0.1.x init-order NPE). Failing here still records via
+        // CrashGuard, and we can show the report plus the new error on screen.
+        val vmResult = runCatching { viewModel }
+        if (vmResult.isFailure) {
+            val detail = (previousCrash?.let { "$it\n\n" } ?: "") +
+                "ViewModel construction failed:\n" + vmResult.exceptionOrNull()!!.stackTraceToString()
+            setContent {
+                Surface {
+                    Text(
+                        detail,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                }
+            }
+            return
+        }
+
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }

@@ -81,23 +81,12 @@ class PraatViewModel : ViewModel() {
     var engineInitError by mutableStateOf<String?>(null)
         private set
 
-    init {
-        viewModelScope.launch {
-            val s = settings
-            runCatching {
-                engine {
-                    PraatEngine.init()
-                    // push the defaults so engine and UI agree from the start
-                    PraatEngine.setPitchRange(s.pitchFloor, s.pitchCeiling)
-                    PraatEngine.setFormantParams(s.formantMaxFreq, s.formantCount, s.formantWindow)
-                }
-                engineReady = true
-                refreshObjects()
-            }.onFailure { t ->
-                engineInitError = t.stackTraceToString()
-            }
-        }
-    }
+    // NOTE: the engine-init block lives at the BOTTOM of this class, after every
+    // property declaration. viewModelScope launches on Dispatchers.Main.immediate,
+    // so the coroutine body runs synchronously inside the constructor up to its
+    // first suspension — an init {} placed here would read properties (settings,
+    // …) whose mutableStateOf delegates are not constructed yet. That NPE was the
+    // OnePlus launch crash (PraatViewModel.kt:81 in the 0.1.x builds).
 
     override fun onCleared() {
         audio.release()
@@ -508,6 +497,26 @@ class PraatViewModel : ViewModel() {
                 }
             }
             return Bitmap.createBitmap(pixels, nx, ny, Bitmap.Config.ARGB_8888).asImageBitmap()
+        }
+    }
+
+    // Engine init. Keep this AFTER all property declarations — see the note near
+    // engineInitError: Main.immediate runs this synchronously during construction.
+    init {
+        viewModelScope.launch {
+            runCatching {
+                val s = settings
+                engine {
+                    PraatEngine.init()
+                    // push the defaults so engine and UI agree from the start
+                    PraatEngine.setPitchRange(s.pitchFloor, s.pitchCeiling)
+                    PraatEngine.setFormantParams(s.formantMaxFreq, s.formantCount, s.formantWindow)
+                }
+                engineReady = true
+                refreshObjects()
+            }.onFailure { t ->
+                engineInitError = t.stackTraceToString()
+            }
         }
     }
 }
