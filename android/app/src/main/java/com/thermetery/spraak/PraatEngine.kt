@@ -10,8 +10,18 @@
 package com.thermetery.spraak
 
 object PraatEngine {
+    /* [Android port] Diagnostic guard: a failed loadLibrary must surface on screen,
+     * not kill the process before any UI exists. Non-null => engine unusable. */
+    @JvmStatic
+    var loadError: Throwable? = null
+        private set
+
     init {
-        System.loadLibrary("praat")
+        try {
+            System.loadLibrary("praat")
+        } catch (t: Throwable) {
+            loadError = t
+        }
     }
 
     /* lifecycle / scripting console */

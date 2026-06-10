@@ -9,6 +9,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
 
@@ -26,13 +39,46 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // [Android port] Diagnostics first: record uncaught exceptions to a file and
+        // surface the previous launch's report (copyable) — see CrashGuard.kt.
+        val previousCrash = CrashGuard.installAndReadPrevious(this)
+
+        // A failed System.loadLibrary must not take the process down before any UI:
+        // show the loader error full-screen instead of touching the engine/view model.
+        val loadError = PraatEngine.loadError
+        if (loadError != null) {
+            setContent {
+                Surface {
+                    Text(
+                        "Spraak could not load its native engine (libpraat.so):\n\n" +
+                            loadError.stackTraceToString(),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                }
+            }
+            return
+        }
+
         // [Android port] Praat's UNIX paths (preferences, PID file, ~) need a writable
         // HOME; iOS got this from the OS. Must run before the view model inits the engine.
         PraatEngine.setEnv("HOME", filesDir.absolutePath)
         PraatEngine.setEnv("TMPDIR", cacheDir.absolutePath)
+
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
-        setContent { SpraakApp(viewModel) }
+        setContent {
+            var crashReport by androidx.compose.runtime.remember { mutableStateOf(previousCrash) }
+            var initErrorDismissed by androidx.compose.runtime.remember { mutableStateOf(false) }
+            SpraakApp(viewModel)
+            crashReport?.let { CrashReportDialog(it) { crashReport = null } }
+            viewModel.engineInitError?.takeUnless { initErrorDismissed }?.let {
+                CrashReportDialog("Engine init failed:\n\n$it") { initErrorDismissed = true }
+            }
+        }
     }
 }

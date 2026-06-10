@@ -76,17 +76,26 @@ class PraatViewModel : ViewModel() {
     /** Shared audio I/O (record + play). Screens may use it directly: vm.audio.isRecording etc. */
     val audio = AudioEngine()
 
+    /** [Android port] Non-null if engine init threw; AboutDialog/screens may show it.
+     * Without this, a throw in the launch{} would kill the process before any UI. */
+    var engineInitError by mutableStateOf<String?>(null)
+        private set
+
     init {
         viewModelScope.launch {
             val s = settings
-            engine {
-                PraatEngine.init()
-                // push the defaults so engine and UI agree from the start
-                PraatEngine.setPitchRange(s.pitchFloor, s.pitchCeiling)
-                PraatEngine.setFormantParams(s.formantMaxFreq, s.formantCount, s.formantWindow)
+            runCatching {
+                engine {
+                    PraatEngine.init()
+                    // push the defaults so engine and UI agree from the start
+                    PraatEngine.setPitchRange(s.pitchFloor, s.pitchCeiling)
+                    PraatEngine.setFormantParams(s.formantMaxFreq, s.formantCount, s.formantWindow)
+                }
+                engineReady = true
+                refreshObjects()
+            }.onFailure { t ->
+                engineInitError = t.stackTraceToString()
             }
-            engineReady = true
-            refreshObjects()
         }
     }
 
