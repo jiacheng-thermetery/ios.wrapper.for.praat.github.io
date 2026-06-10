@@ -65,17 +65,21 @@ class MainActivity : ComponentActivity() {
 
         // [Android port] Praat's UNIX paths (preferences, PID file, ~) need a writable
         // HOME; iOS got this from the OS. Must run before the view model inits the engine.
-        PraatEngine.setEnv("HOME", filesDir.absolutePath)
-        PraatEngine.setEnv("TMPDIR", cacheDir.absolutePath)
+        // Guarded: a JNI mismatch here (UnsatisfiedLinkError — exactly what a stale
+        // per-ABI libpraat.so produces) must land on screen, not kill onCreate.
+        val envResult = runCatching {
+            PraatEngine.setEnv("HOME", filesDir.absolutePath)
+            PraatEngine.setEnv("TMPDIR", cacheDir.absolutePath)
+        }
 
         // Construct the view model HERE, not lazily inside composition: if its
         // constructor throws, composition never starts and no crash UI could show
         // (that masked the 0.1.x init-order NPE). Failing here still records via
         // CrashGuard, and we can show the report plus the new error on screen.
-        val vmResult = runCatching { viewModel }
+        val vmResult = envResult.mapCatching { viewModel }
         if (vmResult.isFailure) {
             val detail = (previousCrash?.let { "$it\n\n" } ?: "") +
-                "ViewModel construction failed:\n" + vmResult.exceptionOrNull()!!.stackTraceToString()
+                "Startup failed:\n" + vmResult.exceptionOrNull()!!.stackTraceToString()
             setContent {
                 Surface {
                     Text(

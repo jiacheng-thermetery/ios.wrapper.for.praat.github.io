@@ -4,13 +4,27 @@
 # GPL-3.0-or-later.
 #
 # Usage:
-#   android/build-bridge.sh [arm64-v8a | x86_64]    (default: arm64-v8a)
+#   android/build-bridge.sh [arm64-v8a | x86_64 | all]    (default: all staged ABIs)
+#
+# Default is ALL staged ABIs: the JNI layer and the .so must never go out of
+# sync per-ABI (a stale arm64 lib with a missing JNI export shipped in 0.1.2
+# because only x86_64 was relinked after a praat_jni.cpp change).
 #
 # Prerequisite: android/build-engine-libs.sh <abi> has staged the engine libs.
 set -euo pipefail
 cd "$(dirname "$0")/.."                       # repo root (upstream-praat)
 
-export PRAAT_ANDROID_ABI="${1:-arm64-v8a}"
+if [ "${1:-all}" = "all" ]; then
+  ABIS="$(ls -d android/build-libs/*/ 2>/dev/null | xargs -n1 basename | grep -v '\.log$' || true)"
+  if [ -z "$ABIS" ]; then
+    echo "No staged engine libs. Run: android/build-engine-libs.sh <abi>" >&2
+    exit 1
+  fi
+  for abi in $ABIS; do "$0" "$abi"; done
+  exit 0
+fi
+
+export PRAAT_ANDROID_ABI="$1"
 source android/androidenv.sh
 
 ENGINE="android/build-libs/$PRAAT_ANDROID_ABI"
