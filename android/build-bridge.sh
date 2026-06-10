@@ -56,5 +56,10 @@ $CXX $CXXFLAGS -shared -static-libstdc++ \
   -Wl,--start-group $LIBS -Wl,--end-group \
   -lm -llog -landroid
 
+# Strip in place: AGP has no NDK configured (the engine is prebuilt), so it
+# packages jniLibs as-is; unstripped this is ~117 MB of -g1 symbols.
+"$TOOLCHAIN/bin/llvm-strip" --strip-unneeded "$OUT/libpraat.so"
+
 echo "Done: $OUT/libpraat.so"
 "$TOOLCHAIN/bin/llvm-readelf" -h "$OUT/libpraat.so" | grep -E 'Machine|Type'
+ls -la "$OUT/libpraat.so"

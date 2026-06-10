@@ -68,7 +68,7 @@ int praatandroid_drawSelectedRecord (double wInches, double hInches, const doubl
 			return 0;
 		}
 		Graphics_stopRecording (me);
-		*outRecord = me -> record;
+		*outRecord = me -> record + 1;   // the recorder writes record [1..irecord] (see sys/GraphicsP.h)
 		return (int) me -> irecord;
 	} catch (MelderError) {
 		Melder_clearError ();
