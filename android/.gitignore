@@ -1,4 +1,6 @@
 *.apk
+*.jks
+keystore.properties
 build-libs/
 .gradle/
 build/

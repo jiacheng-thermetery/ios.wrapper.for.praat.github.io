@@ -1,8 +1,19 @@
 // Part of the Spraak derivative. GPL-3.0-or-later.
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Release signing: android/keystore.properties (gitignored — NEVER commit it) with
+// storeFile/storePassword/keyAlias/keyPassword. When absent, release falls back to
+// the debug key so any checkout still builds; only the keystore holder can sign
+// builds that update an installed release.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -13,16 +24,27 @@ android {
         applicationId = "com.thermetery.spraak"
         minSdk = 26          // matches PRAAT_ANDROID_API in android/androidenv.sh
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 5
+        versionName = "0.1.4"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }   // libpraat.so staged by android/build-bridge.sh
+    }
+
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // Local-only sideload build; signed with the debug key on purpose.
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false   // the engine .so dominates size; enable R8 only after separate testing
+            signingConfig = if (keystoreProps.isNotEmpty()) signingConfigs.getByName("release")
+                            else signingConfigs.getByName("debug")
         }
     }
 
