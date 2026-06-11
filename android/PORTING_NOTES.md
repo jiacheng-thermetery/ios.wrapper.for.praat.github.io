@@ -63,13 +63,43 @@ android/build-bridge.sh arm64-v8a          # libpraat.so -> android/app/src/main
 
 `libpraat.so` links with `-Wl,--no-undefined` (everything resolves), static libc++,
 and `-Wl,-z,max-page-size=16384` for Android 15+ 16-KB-page devices. The app builds
-with Gradle/AGP (`android/`), minSdk 26, and is signed with the debug key for local
-sideloading only — **the APK is not distributed** (GPL source-offer obligations are
-moot for private use, but if it is ever distributed, distribute it under GPL-3 with
-this source tree, which is App-Store-incompatible but F-Droid-friendly).
+with Gradle/AGP (`android/`), minSdk 26. Release builds sign with the Spraak release
+key when the gitignored `android/keystore.properties` is present (debug-key fallback
+otherwise); APKs are published only as sideload artifacts on this repository's GitHub
+Releases, each tagged to its exact source commit (GPL §6 corresponding source) —
+no app-store distribution (App-Store-incompatible but F-Droid-friendly).
 
 ## Threading
 
 The engine's object table is global and unsynchronised. All `PraatEngine` calls are
 funnelled through a single-thread dispatcher in `PraatViewModel` (the Kotlin
 counterpart of the iOS app calling the bridge only from the main actor).
+
+## Emulator (use `android/run-emulator.sh`)
+
+Findings from a long debugging session, recorded so nobody repeats it:
+
+- **Always run accelerated (`-accel on`).** Emulator 36.x with `-accel off` (TCG)
+  crashes with an access violation during netsim WiFi/Bluetooth bring-up *before
+  any guest vCPU starts*; when crashpad mishandles that crash the emulator turns
+  into a zombie that sits forever at ~0 CPU with adb "offline". Software emulation
+  is not a fallback here — it is broken.
+- **Don't trust WMI for acceleration capability.** On a Windows guest where a
+  hypervisor is already running (VBS / VirtualMachinePlatform),
+  `Win32_Processor` reports `VirtualizationFirmwareEnabled=False` because the
+  hypervisor owns VT-x — yet **WHPX works**. The authoritative probe is
+  `emulator-check accel` ("WHPX … is installed and usable"). AEHD, by contrast,
+  needs direct VT-x and can never load in that configuration.
+- **Windows launcher gotchas:** the qemu child process needs `<sdk>/emulator`,
+  `<sdk>/emulator/lib64`, `<sdk>/emulator/lib64/qt/lib` on `PATH` (else it dies
+  instantly with `STATUS_DLL_NOT_FOUND`), and stale `*.lock` files in the AVD
+  directory after a kill make the launcher abort with a bogus
+  "multiple emulators" error.
+- **Binary I/O from PowerShell:** never `adb exec-out screencap -p > file.png`
+  (PowerShell redirection re-encodes the stream and corrupts it); use
+  `adb shell screencap -p /sdcard/s.png` + `adb pull`.
+
+With WHPX the API-35 x86_64 image boots headless in well under a minute, and the
+x86_64 `libpraat.so` (same build scripts, ABI `x86_64`) runs the full analysis
+pipeline there — so app changes can be verified on the emulator before they ever
+touch a device.
