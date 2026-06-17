@@ -22,7 +22,8 @@ Jetpack Compose app — living in
 [`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
 on the **`android-port`** branch. See [the Android section](#android) below.
 
-## iOS ONLY, IGNORE IF YOU ARE ON ANDROID ## #Why you build it yourself — not the app stores#
+## iOS only. Ignore this section if you are on Android. 
+## Why you build it yourself — not the app stores
 
 **This app can't be shipped on the Apple App Store**, and that shapes everything below. The GPL is
 incompatible with the App Store Terms of Service (the DRM, device limits, and installation
@@ -39,7 +40,7 @@ through any app store on Android either** — there is no Play Store listing, an
 Sideloading is a first-class, supported path on Android, so no signing accounts or fees are
 involved at all. See [Android](#android) below.
 
-## Installation (iOS)
+## Installation (iOS only, ignore if you are on android)
 
 > **New to building iOS apps?** This setup — Xcode, the cross-compile toolchain, and (for a real
 > device) code-signing — has a moderately difficult learning curve for your first time and is **not trivial for beginners.** If the steps below
