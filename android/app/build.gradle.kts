@@ -24,8 +24,8 @@ android {
         applicationId = "com.thermetery.spraak"
         minSdk = 26          // matches PRAAT_ANDROID_API in android/androidenv.sh
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }   // libpraat.so staged by android/build-bridge.sh
     }
 

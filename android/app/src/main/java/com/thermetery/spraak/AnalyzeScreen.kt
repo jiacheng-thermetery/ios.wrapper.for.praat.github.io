@@ -70,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,10 +86,28 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
+// [Android port] Friendly display label -> EXACT bundled eSpeak language name. The engine looks
+// up the language by its exact "name" field (dwtools/SpeechSynthesizer.cpp), so a label that
+// isn't a real name makes "Create SpeechSynthesizer" throw "Unknown language" and the whole
+// speak script aborts with no audio. That was the Chinese bug: the picker sent "Mandarin
+// Chinese", which is not a bundled name — the real one is "Chinese (Mandarin, latin as English)".
+// Keeping label and engine name separate means the picker can never drift into that again.
 private val SPEAK_LANGUAGES = listOf(
-    "English (Great Britain)", "English (America)", "French (France)", "German",
-    "Spanish (Spain)", "Italian", "Dutch", "Russian", "Mandarin Chinese", "Japanese",
+    "English (Great Britain)" to "English (Great Britain)",
+    "English (America)" to "English (America)",
+    "French (France)" to "French (France)",
+    "German" to "German",
+    "Spanish (Spain)" to "Spanish (Spain)",
+    "Italian" to "Italian",
+    "Dutch" to "Dutch",
+    "Russian" to "Russian",
+    "Mandarin Chinese" to "Chinese (Mandarin, latin as English)",
+    "Cantonese" to "Chinese (Cantonese)",
+    "Japanese" to "Japanese",
 )
+private val SPEAK_LANGUAGE_LABELS = SPEAK_LANGUAGES.map { it.first }
+private fun speakEngineLanguage(label: String): String =
+    SPEAK_LANGUAGES.firstOrNull { it.first == label }?.second ?: label
 private val SPEAK_VOICES = listOf("Female1", "Male1", "default")
 
 @Composable
@@ -103,7 +122,7 @@ fun AnalyzeScreen(vm: PraatViewModel) {
     var zoomDialog by remember { mutableStateOf<Pair<String, String>?>(null) }   // (from, to)
     var playDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
     var speakText by remember { mutableStateOf("Frogs are cute. I love frogs. Frogs!") }
-    var speakLang by remember { mutableStateOf(SPEAK_LANGUAGES.first()) }
+    var speakLang by remember { mutableStateOf(SPEAK_LANGUAGE_LABELS.first()) }
     var speakVoice by remember { mutableStateOf(SPEAK_VOICES.first()) }
 
     // [Android port] iOS used .fileImporter + AVAudioFile decode; here the document is copied
@@ -261,7 +280,18 @@ fun AnalyzeScreen(vm: PraatViewModel) {
             language = speakLang, onLanguage = { speakLang = it },
             voice = speakVoice, onVoice = { speakVoice = it },
             onDismiss = { showSpeak = false },
-            onSpeak = { scope.launch { vm.speak(speakText, speakLang, speakVoice) } },
+            onSpeak = {
+                // map the display label to the exact engine language name, and surface a
+                // failure instead of silently producing nothing (what hid the Chinese bug).
+                scope.launch {
+                    val ok = vm.speak(speakText, speakEngineLanguage(speakLang), speakVoice)
+                    if (!ok) Toast.makeText(
+                        context,
+                        "Couldn't synthesize that — try different text or language.",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
         )
     }
     if (showSlice) SliceSheet(vm, onDismiss = { showSlice = false })
@@ -473,8 +503,16 @@ private fun SpeakSheet(
             Text("Speak (eSpeak)", style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(text, onText, Modifier.fillMaxWidth(),
                 label = { Text("Text to speak") }, minLines = 2, maxLines = 5)
-            DropdownField("Language", SPEAK_LANGUAGES, language, onLanguage)
+            DropdownField("Language", SPEAK_LANGUAGE_LABELS, language, onLanguage)
             DropdownField("Voice", SPEAK_VOICES, voice, onVoice)
+            // Honest expectations for CJK: eSpeak reads Han characters via Mandarin/Cantonese,
+            // but its Japanese voice only handles kana (no kanji dictionary).
+            Text(
+                "Mandarin & Cantonese read Chinese characters. Japanese reads kana " +
+                    "(hiragana/katakana) — kanji aren't supported by eSpeak.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
