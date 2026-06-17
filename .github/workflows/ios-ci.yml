@@ -1,0 +1,170 @@
+# ios-ci.yml — verify the Spraak iOS app COMPILES on a free GitHub-hosted macOS
+# runner, so the maintainer can check iOS code by pushing — no Mac and no Apple
+# Developer account needed (Simulator builds require no code signing).
+#
+# Two jobs, fast-to-thorough:
+#   • swift-typecheck — type-checks the SwiftUI app against the real iOS Simulator
+#     SDK in ~1–2 min, WITHOUT building the C/C++ engine. This is the quick
+#     "did my Swift change compile?" signal and the one most edits need.
+#   • simulator-build — builds the 14 Praat + 12 external static libs, generates
+#     the Xcode project, and runs a full `xcodebuild` Simulator build (compile +
+#     link). Slower, but proves the whole app, bridge, and engine link together.
+#
+# Both run on every push / PR touching ios/** or an engine dir, and can be started
+# by hand (Actions tab → Run workflow) — convenient from the GitHub mobile app.
+#
+# Local build references mirrored here:
+#   ios/iosenv.sh ............ cross-compile toolchain/flags (sim arm64 default)
+#   ios/build-engine-libs.sh . builds + stages engine libs -> ios/build-libs/<sdk>/
+#   project.yml .............. XcodeGen spec; links ios/build-libs/iphonesimulator; scheme "Spraak"
+#   ios/app/build-app.sh ..... the manual swiftc Simulator build this is derived from
+
+name: iOS CI (Simulator build)
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - "melder/**"
+      - "kar/**"
+      - "sys/**"
+      - "fon/**"
+      - "foned/**"
+      - "stat/**"
+      - "dwsys/**"
+      - "LPC/**"
+      - "gram/**"
+      - "EEG/**"
+      - "dwtools/**"
+      - "sensors/**"
+      - "FFNet/**"
+      - "artsynth/**"
+      - "external/**"
+      - ".github/workflows/ios-ci.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - "project.yml"
+      - "melder/**"
+      - "kar/**"
+      - "sys/**"
+      - "fon/**"
+      - "foned/**"
+      - "stat/**"
+      - "dwsys/**"
+      - "LPC/**"
+      - "gram/**"
+      - "EEG/**"
+      - "dwtools/**"
+      - "sensors/**"
+      - "FFNet/**"
+      - "artsynth/**"
+      - "external/**"
+      - ".github/workflows/ios-ci.yml"
+  # Manual trigger — appears under the Actions tab; runnable from a phone browser.
+  workflow_dispatch:
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # FAST: type-check the Swift app only. No engine build, so a Swift syntax/type
+  # error (exactly the kind a one-line edit can introduce) is reported in minutes
+  # regardless of the C/C++ engine. Uses the runner's default Xcode for maximum
+  # reliability (no version pin to drift out of date).
+  # ---------------------------------------------------------------------------
+  swift-typecheck:
+    name: Swift type-check (no engine)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Type-check the SwiftUI app against the iOS Simulator SDK
+        run: |
+          set -euo pipefail
+          SDKPATH="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+          # -typecheck = parse + full semantic/type analysis, no codegen/link, so it
+          # needs no engine .a files — only the bridging header's C declarations.
+          xcrun --sdk iphonesimulator swiftc -typecheck \
+            -sdk "$SDKPATH" -target arm64-apple-ios17.0-simulator \
+            -import-objc-header ios/app/Spraak-Bridging-Header.h \
+            -I ios/app \
+            ios/app/PraatApp.swift ios/app/ContentView.swift ios/app/PraatModel.swift \
+            ios/app/AudioEngine.swift ios/app/SpectrogramView.swift ios/app/SettingsView.swift \
+            ios/app/ObjectsView.swift ios/app/CommandForms.swift ios/app/TextGridEditor.swift \
+            ios/app/VowelView.swift ios/app/ManipulationView.swift ios/app/ExperimentMFCView.swift
+          echo "Swift type-check passed — the iOS app code compiles."
+
+  # ---------------------------------------------------------------------------
+  # THOROUGH: build the engine libs + the whole app for the Simulator (no signing).
+  # ---------------------------------------------------------------------------
+  simulator-build:
+    name: Build Spraak for iOS Simulator
+    runs-on: macos-14
+    env:
+      # project.yml expects a DEVELOPMENT_TEAM for device builds; empty it so the
+      # XcodeGen ${DEVELOPMENT_TEAM} substitution injects nothing for the Simulator.
+      DEVELOPMENT_TEAM: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-path
+          swift --version
+
+      # Build + stage the Simulator slice only (CI never builds for a device).
+      # build-engine-libs.sh sources ios/iosenv.sh and runs `make -j -B -C <dir>`
+      # for all 14 Praat dirs + 12 external/* dirs, copying lib*.a into
+      # ios/build-libs/iphonesimulator/<dir>/.
+      - name: Build engine static libs (iphonesimulator)
+        run: |
+          set -euo pipefail
+          chmod +x ios/build-engine-libs.sh
+          ./ios/build-engine-libs.sh iphonesimulator
+          echo "Staged libs:"
+          ls -1 ios/build-libs/iphonesimulator/*/lib*.a | head -40
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          xcodebuild -list -project Spraak.xcodeproj
+
+      # Full Simulator build. CODE_SIGNING_ALLOWED=NO is what removes the need for
+      # an Apple account. ENGINE_LIBS_DIR (project.yml) already points at the
+      # iphonesimulator slice staged above. A generic destination avoids depending
+      # on a specific simulator model image.
+      - name: Build app (xcodebuild, iOS Simulator, no signing)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Spraak.xcodeproj \
+            -scheme Spraak \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+          | tee xcodebuild.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          if-no-files-found: ignore
