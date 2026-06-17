@@ -78,9 +78,16 @@ jobs:
   # ---------------------------------------------------------------------------
   swift-typecheck:
     name: Swift type-check (no engine)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      # The app uses iOS-26-SDK APIs (e.g. AVAudioSession .allowBluetoothHFP in
+      # AudioEngine.swift), so CI must use Xcode 26 like the maintainer's Mac. '26'
+      # resolves to the latest 26.x on the image; bump/relax if the image changes.
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
       - name: Toolchain
         run: |
           xcodebuild -version
@@ -106,13 +113,20 @@ jobs:
   # ---------------------------------------------------------------------------
   simulator-build:
     name: Build Spraak for iOS Simulator
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       # project.yml expects a DEVELOPMENT_TEAM for device builds; empty it so the
       # XcodeGen ${DEVELOPMENT_TEAM} substitution injects nothing for the Simulator.
       DEVELOPMENT_TEAM: ""
     steps:
       - uses: actions/checkout@v4
+
+      # Match the maintainer's Xcode 26 (the engine + app and the generated project
+      # format both expect it; an older xcodebuild can't read the generated project).
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
 
       - name: Toolchain
         run: |
