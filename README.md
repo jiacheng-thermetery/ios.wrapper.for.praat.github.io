@@ -22,7 +22,7 @@ Jetpack Compose app — living in
 [`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
 on the **`android-port`** branch. See [the Android section](#android) below.
 
-## Why you build it yourself — not the app stores
+## iOS ONLY, IGNORE IF YOU ARE ON ANDROID ## #Why you build it yourself — not the app stores#
 
 **This app can't be shipped on the Apple App Store**, and that shapes everything below. The GPL is
 incompatible with the App Store Terms of Service (the DRM, device limits, and installation
