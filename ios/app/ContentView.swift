@@ -415,7 +415,7 @@ struct AnalyzeView: View {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("speech.wav")
         try? FileManager.default.removeItem(at: url)
         let script = """
-        synth = Create SpeechSynthesizer: "\(speakLang)", "\(speakVoice)"
+        synth = Create SpeechSynthesizer: "\(speakEngineLanguage(speakLang))", "\(speakVoice)"
         selectObject: synth
         sound = To Sound: "\(safe)", "no"
         selectObject: sound
@@ -610,15 +610,37 @@ struct AboutView: View {
     }
 }
 
+// [iOS port] Friendly display label -> EXACT bundled eSpeak language name. The engine looks the
+// language up by its exact "name" field (dwtools/SpeechSynthesizer.cpp), so a label that isn't a
+// real bundled name makes "Create SpeechSynthesizer" throw "Unknown language" and the whole speak
+// script aborts with no audio. That was the Chinese bug: "Mandarin Chinese" is not a bundled
+// name — the real one is "Chinese (Mandarin, latin as English)". Keeping label and engine name
+// separate means the picker can never drift into that again.
+let speakLanguageOptions: [(label: String, engine: String)] = [
+    ("English (Great Britain)", "English (Great Britain)"),
+    ("English (America)", "English (America)"),
+    ("French (France)", "French (France)"),
+    ("German", "German"),
+    ("Spanish (Spain)", "Spanish (Spain)"),
+    ("Italian", "Italian"),
+    ("Dutch", "Dutch"),
+    ("Russian", "Russian"),
+    ("Mandarin Chinese", "Chinese (Mandarin, latin as English)"),
+    ("Cantonese", "Chinese (Cantonese)"),
+    ("Japanese", "Japanese"),
+]
+let speakLanguageLabels = speakLanguageOptions.map { $0.label }
+func speakEngineLanguage(_ label: String) -> String {
+    speakLanguageOptions.first { $0.label == label }?.engine ?? label
+}
+
 struct SpeakView: View {
     @Binding var text: String
     @Binding var language: String
     @Binding var voice: String
     var onSpeak: () -> Void
     @Environment(\.dismiss) private var dismiss
-    private let languages = ["English (Great Britain)", "English (America)", "French (France)",
-                             "German", "Spanish (Spain)", "Italian", "Dutch", "Russian",
-                             "Mandarin Chinese", "Japanese"]
+    private let languages = speakLanguageLabels
     private let voices = ["Female1", "Male1", "default"]
     var body: some View {
         NavigationView {
@@ -629,6 +651,11 @@ struct SpeakView: View {
                 Section {
                     Picker("Language", selection: $language) { ForEach(languages, id: \.self) { Text($0) } }
                     Picker("Voice", selection: $voice) { ForEach(voices, id: \.self) { Text($0) } }
+                } footer: {
+                    // Honest expectations for CJK: eSpeak reads Han characters via Mandarin/
+                    // Cantonese, but its Japanese voice only handles kana (no kanji dictionary).
+                    Text("Mandarin & Cantonese read Chinese characters. Japanese reads kana "
+                         + "(hiragana/katakana) — kanji aren't supported by eSpeak.")
                 }
             }
             .navigationTitle("Speak (eSpeak)")
