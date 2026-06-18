@@ -1,9 +1,13 @@
-# Spraak — an *unofficial* iOS & Android app built on Praat
+# Spraak — an *unofficial* iOS app built on Praat
 
 **This is a modified version of Praat, not the original.** "Spraak" is this port's own name (Dutch
-for "speech"); it is an **unofficial** iOS & Android derivative and is **not produced, reviewed, or endorsed by
+for "speech"); it is an **unofficial** iOS derivative and is **not produced, reviewed, or endorsed by
 Paul Boersma, David Weenink, or the University of Amsterdam.** "Praat" is used here only descriptively,
 to say what engine Spraak runs.
+
+> **This is the iOS branch.** An Android port (Kotlin / Jetpack Compose) lives on the
+> [`android-port`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port)
+> branch.
 
 **Spraak** cross-compiles Praat's analysis + scripting engine for iOS (arm64) and adds a SwiftUI front end:
 record/analyze with a live spectrogram and pitch/formant/intensity overlays, a native **Objects**
@@ -17,12 +21,11 @@ Graphics drawing path). For details, build instructions, and the change record s
 - [`ios/LICENSING.md`](ios/LICENSING.md) — license audit & GPL-compliance plan
 - [`ios/FEATURES_ROADMAP.md`](ios/FEATURES_ROADMAP.md) — feature status
 
-There is also an **Android port** — same engine, same C bridge, same six tabs, as a Kotlin /
-Jetpack Compose app — living in
-[`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
-on the **`android-port`** branch. See [the Android section](#android) below.
+The iOS app is also compile-checked on every push by a free macOS GitHub Actions runner — see
+[`.github/workflows/ios-ci.yml`](.github/workflows/ios-ci.yml) (you can verify iOS builds without
+owning a Mac, straight from the GitHub Actions tab).
 
-## Why you build it yourself — not the app stores
+## Why you build it yourself — not the App Store
 
 **This app can't be shipped on the Apple App Store**, and that shapes everything below. The GPL is
 incompatible with the App Store Terms of Service (the DRM, device limits, and installation
@@ -32,12 +35,6 @@ software: instead of tapping *Install*, you get the **source** and run it by **b
 or **sideloading** onto your own device. So the rest of this README is the build: a Simulator path
 that needs no signing, and a real-device path that you sign with your own Apple ID. (Full reasoning:
 [`ios/LICENSING.md`](ios/LICENSING.md) §4.)
-
-The Android story is the same in spirit and easier in practice: **we don't distribute binaries
-through any app store on Android either** — there is no Play Store listing, and the APKs are
-**local sideload builds** (GPL-3.0-or-later, debug-signed, built by you from this source tree).
-Sideloading is a first-class, supported path on Android, so no signing accounts or fees are
-involved at all. See [Android](#android) below.
 
 ## Installation (iOS)
 
@@ -131,46 +128,12 @@ automate exactly that (on-device re-signing with the user's Apple ID, and auto-r
 private signing key — GPLv3's "Installation Information" here is simply *the source plus these
 instructions*.
 
-## Android
-
-The Android port lives in
-[`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
-on the **`android-port`** branch and mirrors the iOS app. What exists today:
-
-- **The full Praat engine** as `libpraat.so` under the NDK, built with Praat's existing upstream
-  **Linux barren** configuration (Android *is* Linux) — **zero engine-source changes** beyond that
-  config; the iOS port's tagged edits are all inert on Android.
-- **The same C bridge as iOS**: `ios/app/PraatBridge.mm` is plain C++ and compiles for Android
-  unchanged, wrapped 1:1 by a thin JNI layer for Kotlin.
-- A **Kotlin / Jetpack Compose** app with the same six tabs as the iOS app (Analyze, Objects,
-  Vowel, Manipulation, Experiment, Script), including the TextGrid editor.
-- **Draw** via Praat's backend-independent **Graphics recording**: the engine records the drawing
-  as an opcode stream, and the app replays it onto an Android `Canvas`.
-- Live audio through **AudioRecord / AudioTrack** in the app shell (the engine itself builds
-  audio-less, exactly like the iOS build).
-
-Build (Android NDK + Gradle), from the repository root on the `android-port` branch:
-
-```sh
-android/build-engine-libs.sh arm64-v8a   # 1. Praat's static libs, cross-compiled with the NDK
-android/build-bridge.sh arm64-v8a        # 2. bridge + JNI -> libpraat.so in the app's jniLibs
-cd android && gradle :app:assembleDebug  # 3. the Compose app, with libpraat.so inside
-```
-
-For the change record and design notes see
-[`android/PORTING_NOTES.md`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/blob/android-port/android/PORTING_NOTES.md)
-(companion to `ios/PORTING_NOTES.md`). As everywhere in this project, the result is a **local
-sideload build**: the debug-signed APK goes onto your own device via `adb install` (or any
-sideloading route), and is **not distributed through any app store** — GPL-3.0-or-later, source
-first, no store listings.
-
 ## License
 
 **Free software under GPL-3.0-or-later**, exactly like upstream Praat, and distributed WITHOUT ANY
-WARRANTY. Modifications for the iOS and Android ports were made in 2024–2026 by the ports'
-contributors. As explained at the top, the GPL is precisely what keeps this off the App Store — so
-distribute it as **source** (or a self-signed sideload onto your own device), never as a signed
-binary; on Android likewise, APKs stay local sideload builds and off the app stores. See
+WARRANTY. Modifications for the iOS port were made in 2024–2026 by the port's contributors. As
+explained at the top, the GPL is precisely what keeps this off the App Store — so distribute it as
+**source** (or a self-signed sideload onto your own device), never as a signed binary. See
 [`ios/LICENSING.md`](ios/LICENSING.md) §4.
 
 Upstream Praat: <https://github.com/praat/praat> · <https://praat.org>
