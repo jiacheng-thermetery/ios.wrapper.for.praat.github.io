@@ -1,156 +1,59 @@
-# Spraak — an *unofficial* iOS & Android app built on Praat
+# Spraak — an *unofficial* Android app built on Praat
 
 **This is a modified version of Praat, not the original.** "Spraak" is this port's own name (Dutch
-for "speech"); it is an **unofficial** iOS & Android derivative and is **not produced, reviewed, or endorsed by
+for "speech"); it is an **unofficial** Android derivative and is **not produced, reviewed, or endorsed by
 Paul Boersma, David Weenink, or the University of Amsterdam.** "Praat" is used here only descriptively,
 to say what engine Spraak runs.
 
-**Spraak** cross-compiles Praat's analysis + scripting engine for iOS (arm64) and adds a SwiftUI front end:
-record/analyze with a live spectrogram and pitch/formant/intensity overlays, a native **Objects**
-window over the live interpreter, eSpeak text-to-speech, and TextGrid / Manipulation (PSOLA) / Vowel /
-ExperimentMFC editors plus a script console. Almost everything new lives in the [`ios/`](ios/)
-directory; a small number of core source files carry tagged `// [iOS port]` edits (e.g. an iOS Quartz
-Graphics drawing path). For details, build instructions, and the change record see:
+> **This is the Android branch.** The iOS port (SwiftUI) lives on the
+> [`ios-port`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/ios-port)
+> branch.
 
-- [`ios/README.md`](ios/README.md) — deep dive: what works today, the file map, and design notes
-- [`ios/PORTING_NOTES.md`](ios/PORTING_NOTES.md) — every change made to upstream source (GPLv3 §5 record)
-- [`ios/LICENSING.md`](ios/LICENSING.md) — license audit & GPL-compliance plan
-- [`ios/FEATURES_ROADMAP.md`](ios/FEATURES_ROADMAP.md) — feature status
+**Spraak** runs Praat's full analysis + scripting engine on Android — compiled to a native
+`libpraat.so` with the NDK — behind a **Kotlin / Jetpack Compose** front end: record and analyze with
+a live spectrogram and pitch/formant/intensity overlays, a native **Objects** window over the live
+interpreter, eSpeak text-to-speech, and TextGrid / Manipulation (PSOLA) / Vowel / ExperimentMFC
+editors plus a script console. Everything specific to Android lives in the [`android/`](android/)
+directory; the design and change record are in
+[`android/PORTING_NOTES.md`](android/PORTING_NOTES.md).
 
-There is also an **Android port** — same engine, same C bridge, same six tabs, as a Kotlin /
-Jetpack Compose app — living in
-[`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
-on the **`android-port`** branch. See [the Android section](#android) below.
+How it fits together:
 
-## iOS only. Ignore this section if you are on Android. 
-## Why you build it yourself — not the app stores
+- **The full Praat engine** as `libpraat.so` under the NDK, built from Praat's existing upstream
+  **Linux barren** configuration (Android *is* Linux) — **zero engine-source changes**.
+- **A C bridge shared with the iOS port** (`ios/app/PraatBridge.mm`, plain C++) compiled for Android
+  unchanged and wrapped 1:1 by a thin JNI layer for Kotlin.
+- The same six tabs the iOS app has (Analyze, Objects, Vowel, Manipulation, Experiment, Script),
+  including the TextGrid editor.
+- **Draw** via Praat's backend-independent **Graphics recording**: the engine records the drawing as
+  an opcode stream and the app replays it onto an Android `Canvas`.
+- Live audio through **AudioRecord / AudioTrack** (the engine itself builds audio-less).
 
-**This app can't be shipped on the Apple App Store**, and that shapes everything below. The GPL is
-incompatible with the App Store Terms of Service (the DRM, device limits, and installation
-restrictions the GPL forbids), and Praat has multiple copyright holders, so no one can grant an
-App-Store exception. That isn't a shortcoming of this port — it's the flip side of Praat being free
-software: instead of tapping *Install*, you get the **source** and run it by **building it yourself**
-or **sideloading** onto your own device. So the rest of this README is the build: a Simulator path
-that needs no signing, and a real-device path that you sign with your own Apple ID. (Full reasoning:
-[`ios/LICENSING.md`](ios/LICENSING.md) §4.)
+## Install — sideload, not an app store
 
-The Android story is the same in spirit and easier in practice: **we don't distribute binaries
-through any app store on Android either** — there is no Play Store listing, and the APKs are
-**local sideload builds** (GPL-3.0-or-later, debug-signed, built by you from this source tree).
-Sideloading is a first-class, supported path on Android, so no signing accounts or fees are
-involved at all. See [Android](#android) below.
+We don't ship Spraak through the Play Store. The GPL is incompatible with app-store terms (the DRM
+and installation restrictions copyleft forbids), and Praat has multiple copyright holders, so no one
+could grant an exception. On Android that's no hardship — **sideloading is a first-class, supported
+path**, so you install the APK directly, with no store, account, or fees.
 
-## Installation (iOS only, ignore if you are on android)
+### Option A — install a prebuilt APK (easiest)
 
-> **New to building iOS apps?** This setup — Xcode, the cross-compile toolchain, and (for a real
-> device) code-signing — has a moderately difficult learning curve for your first time and is **not trivial for beginners.** If the steps below
-> are over your head, paste this README into your LLM of choice (Claude, ChatGPT, …) and ask it to
-> set up the environment with you, step by step, for your machine. For example, try the prompt below:
-
-```
-I'd like to install `github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io` onto my iPhone. It is basically an iOS wrapper for the phonetic analysis software Praat. I am new to compiling, sideloading, signing apps, and this whole installation process. Would you please walk me through step by step for this installation? 
-```
-
-Requires [Xcode](https://developer.apple.com/xcode/) with the iOS SDK. All commands run from the
-repository root.
-
-### On the iOS Simulator (no signing needed)
+Download the latest `Spraak-*-release.apk` from the
+[**Releases**](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/releases) page,
+then install it:
 
 ```sh
-# 1. Build Praat's engine (static libs) for the iOS Simulator (arm64):
-source ios/iosenv.sh
-for d in kar melder sys dwsys stat fon foned LPC dwtools gram FFNet EEG artsynth sensors; do make -C $d; done
-for d in num clapack gsl glpk lame mp3 flac vorbis opusfile espeak portaudio whispercpp; do make -C external/$d; done
-
-# 2. Build, install and launch the SwiftUI app on a booted simulator:
-bash ios/app/build-app.sh "iPhone 16"
+adb install Spraak-0.1.5-release.apk
+# …or open the APK in a file manager on the phone and allow "install unknown apps"
 ```
 
-`ios/iosenv.sh` and `ios/app/build-app.sh` default to the system Xcode at `/Applications/Xcode.app`;
-set `DEVELOPER_DIR` to override (e.g. `export DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer`).
+Release APKs are signed with the project's own key (so updates install in place), carry both
+`arm64-v8a` and `x86_64`, and need Android 8.0+ (minSdk 26). Every release names the exact source
+commit and the APK's SHA-256 — that tagged tree is the GPL "corresponding source" for the binary.
 
-### Running on a real iPhone (signing & sideloading)
+### Option B — build it yourself
 
-iOS will not launch an app on a physical device unless it is **code-signed** — only the Simulator
-runs unsigned builds. Because the GPL keeps this off the App Store (see above), the way onto a
-device is to **sign it yourself**, which is free and fully supported.
-
-**For your own phone, just sign it — there are no GPL strings attached** (personal use isn't
-"distribution"). Use whatever signing identity you have:
-
-- **Free Apple ID** — works in Xcode (choose your personal team); the build runs on your own
-  devices but **expires after 7 days** (re-install to refresh).
-- **Paid Apple Developer Program** ($99/yr) — your *development* certificate signs builds that last
-  **one year** on your registered devices. If you already have it, use it: it's the least hassle
-  (no weekly re-signing). You do **not** need a paid account just to run it on your own phone.
-
-> ⚠️ **The $99/year is Apple's fee, paid in full to Apple — not a subscription from us.** Neither
-> this project's contributors nor the original Praat authors provide it, receive any part of it, or
-> have any financial relationship with you. This software is **free** in both senses (freedom *and*
-> price): we charge nothing and never will. The only thing money buys here is Apple's optional
-> convenience — a developer account whose signing certificate lasts a year instead of the free
-> account's 7 days. The **free Apple ID path costs $0** and is enough to run the app.
-
-**Steps.** The repo's `build-app.sh` targets the **Simulator** and doesn't sign; for a real device
-use the generated Xcode project (`project.yml`, [XcodeGen](https://github.com/yonaskolb/XcodeGen)):
-
-```sh
-# 1. Build the engine static libs for the device slice (arm64, iphoneos):
-export PRAAT_IOS_SDK=iphoneos PRAAT_IOS_TARGET=arm64-apple-ios15.0
-source ios/iosenv.sh
-for d in kar melder sys dwsys stat fon foned LPC dwtools gram FFNet EEG artsynth sensors; do make -B -C $d; done
-for d in num clapack gsl glpk lame mp3 flac vorbis opusfile espeak portaudio whispercpp; do make -B -C external/$d; done
-
-# 2. Generate Spraak.xcodeproj (compiles the SwiftUI app + C++ bridge, links the libs):
-brew install xcodegen
-export DEVELOPMENT_TEAM=XXXXXXXXXX        # your 10-char Apple Developer Team ID (or set it in Xcode)
-xcodegen generate
-```
-
-Then **enable Developer Mode on the iPhone** (*Settings → Privacy & Security → Developer Mode* → on
-→ restart), `open Spraak.xcodeproj`, select your connected iPhone as the run destination, and
-**Run** (⌘R). With automatic signing, Xcode registers the device with your team, provisions, signs,
-installs, and launches. The first launch is blocked as an untrusted developer until you trust it on
-the phone: *Settings → General → VPN & Device Management → your profile → Trust*.
-
-> **Note (`-iquote`):** Praat ships `melder/complex.h`, which shadows the C library's `<complex.h>`
-> if Praat's dirs are on a plain `-I` path that the Swift Clang importer also sees — that breaks
-> every system module. `project.yml` therefore passes the Praat dirs via `-iquote` (quoted-include
-> only) on the C++ compile, never via the target-wide header search paths. Don't "simplify" that.
-
-(A free Apple ID works too — leave `DEVELOPMENT_TEAM` unset and pick your personal team in Xcode ▸
-target ▸ *Signing & Capabilities*; signatures then expire after 7 days. Or `codesign` the built
-`.app` manually and install via `xcrun devicectl device install app` — Xcode is just far less fiddly.)
-
-**Sharing with other people — share the source, not your signed binary.** Free-account signatures
-expire in 7 days, ad-hoc distribution caps at 100 registered devices/year, and **Enterprise**
-certificates *may not* be used for public distribution (Apple revokes that). Point people at this
-repository so each person builds and signs with **their own** Apple ID; **AltStore / SideStore**
-automate exactly that (on-device re-signing with the user's Apple ID, and auto-refresh of the
-7-day signature). This is also what keeps the project **GPL-clean**: anyone can install their own
-**modified** build on their device (which the App Store forbids), and you never have to share your
-private signing key — GPLv3's "Installation Information" here is simply *the source plus these
-instructions*.
-
-## Android
-
-The Android port lives in
-[`android/`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/tree/android-port/android)
-on the **`android-port`** branch and mirrors the iOS app. What exists today:
-
-- **The full Praat engine** as `libpraat.so` under the NDK, built with Praat's existing upstream
-  **Linux barren** configuration (Android *is* Linux) — **zero engine-source changes** beyond that
-  config; the iOS port's tagged edits are all inert on Android.
-- **The same C bridge as iOS**: `ios/app/PraatBridge.mm` is plain C++ and compiles for Android
-  unchanged, wrapped 1:1 by a thin JNI layer for Kotlin.
-- A **Kotlin / Jetpack Compose** app with the same six tabs as the iOS app (Analyze, Objects,
-  Vowel, Manipulation, Experiment, Script), including the TextGrid editor.
-- **Draw** via Praat's backend-independent **Graphics recording**: the engine records the drawing
-  as an opcode stream, and the app replays it onto an Android `Canvas`.
-- Live audio through **AudioRecord / AudioTrack** in the app shell (the engine itself builds
-  audio-less, exactly like the iOS build).
-
-Build (Android NDK + Gradle), from the repository root on the `android-port` branch:
+Needs the Android NDK, JDK 17, and Gradle. From the repository root on the `android-port` branch:
 
 ```sh
 android/build-engine-libs.sh arm64-v8a   # 1. Praat's static libs, cross-compiled with the NDK
@@ -158,21 +61,17 @@ android/build-bridge.sh arm64-v8a        # 2. bridge + JNI -> libpraat.so in the
 cd android && gradle :app:assembleDebug  # 3. the Compose app, with libpraat.so inside
 ```
 
-For the change record and design notes see
-[`android/PORTING_NOTES.md`](https://github.com/jiacheng-thermetery/ios.wrapper.for.praat.github.io/blob/android-port/android/PORTING_NOTES.md)
-(companion to `ios/PORTING_NOTES.md`). As everywhere in this project, the result is a **local
-sideload build**: the debug-signed APK goes onto your own device via `adb install` (or any
-sideloading route), and is **not distributed through any app store** — GPL-3.0-or-later, source
-first, no store listings.
+`android/run-emulator.sh` brings up an accelerated headless emulator (and can install an APK) for
+testing without a device. Toolchain setup, release signing, and emulator notes are all in
+[`android/PORTING_NOTES.md`](android/PORTING_NOTES.md).
 
 ## License
 
 **Free software under GPL-3.0-or-later**, exactly like upstream Praat, and distributed WITHOUT ANY
-WARRANTY. Modifications for the iOS and Android ports were made in 2024–2026 by the ports'
-contributors. As explained at the top, the GPL is precisely what keeps this off the App Store — so
-distribute it as **source** (or a self-signed sideload onto your own device), never as a signed
-binary; on Android likewise, APKs stay local sideload builds and off the app stores. See
-[`ios/LICENSING.md`](ios/LICENSING.md) §4.
+WARRANTY. Modifications for the Android port were made in 2024–2026 by the port's contributors. The
+complete corresponding source for any released APK is this repository at that release's tag. The full
+license audit — covering the shared engine and the bundled third-party libraries, and equally
+applicable to the Android build — is in [`ios/LICENSING.md`](ios/LICENSING.md).
 
 Upstream Praat: <https://github.com/praat/praat> · <https://praat.org>
 
