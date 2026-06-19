@@ -200,6 +200,8 @@ autoInterpreter Interpreter_createFromEnvironment (
 	MelderFile optionalFile
 );
 
+void Interpreter_rememberScript (Interpreter me, MelderFile scriptFile, bool fullTrust);
+
 void Interpreters_undangleEnvironment (Editor environment) noexcept;
 
 void Melder_includeIncludeFiles (autostring32 *text, bool onlyInCodeChunks = false);

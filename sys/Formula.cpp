@@ -201,7 +201,9 @@ enum { NO_SYMBOL_,
 			CREATE_FOLDER_, CREATE_DIRECTORY_, SET_WORKING_DIRECTORY_, VARIABLE_EXISTS_,
 			READ_FILE_, READ_FILE_STR_, READ_FILE_VEC_, READ_FILE_MAT_,
 			UNICODE_TO_BACKSLASH_TRIGRAPHS_STR_, BACKSLASH_TRIGRAPHS_TO_UNICODE_STR_, ENVIRONMENT_STR_,
-		#define HIGH_FUNCTION_STR1  ENVIRONMENT_STR_
+			BIG_INTEGER_STR_, HALF_STR_, GRAPHICAL_HALF_STR_, SINGLE_STR_, GRAPHICAL_SINGLE_STR_, DOUBLE_STR_, GRAPHICAL_DOUBLE_STR_,
+			NATURAL_LOGARITHM_STR_, GRAPHICAL_NATURAL_LOGARITHM_STR_,
+		#define HIGH_FUNCTION_STR1  GRAPHICAL_NATURAL_LOGARITHM_STR_
 		#define LOW_FUNCTION_STR0  DATE_STR_
 			DATE_STR_, DATE_UTC_STR_, DATE_ISO_STR_, DATE_UTC_ISO_STR_, DATE_VEC_, DATE_UTC_VEC_, INFO_STR_,   // TODO: two of those aren't really string functions
 		#define HIGH_FUNCTION_STR0  INFO_STR_
@@ -210,11 +212,11 @@ enum { NO_SYMBOL_,
 			STARTS_WITH_, STARTS_WITH_CASE_INSENSITIVE_, ENDS_WITH_, ENDS_WITH_CASE_INSENSITIVE_,
 			INDEX_REGEX_, RINDEX_REGEX_, EXTRACT_NUMBER_,
 			MOVE_AND_OR_RENAME_FILE_,
-		#define HIGH_FUNCTION_STR2  MOVE_AND_OR_RENAME_FILE_
+			FIXED_STR_, PERCENT_STR_, GRAPHICAL_PERCENT_STR_, HEXADECIMAL_STR_,
+		#define HIGH_FUNCTION_STR2  HEXADECIMAL_STR_
 		EXTRACT_WORD_STR_, EXTRACT_LINE_STR_,
 		REPLACE_STR_, REPLACE_REGEX_STR_,
-		FIXED_STR_, PERCENT_STR_, HEXADECIMAL_STR_,
-	#define HIGH_STRING_FUNCTION  HEXADECIMAL_STR_
+	#define HIGH_STRING_FUNCTION  REPLACE_REGEX_STR_
 
 	/* Range functions. */
 	#define LOW_RANGE_FUNCTION  SUM_OVER_
@@ -260,7 +262,7 @@ enum { NO_SYMBOL_,
 /* The names that start with an underscore (_) do not occur in the formula text: */
 /* they are used in error messages and in debugging (see Formula_print). */
 
-static const conststring32 Formula_instructionNames [1 + highestSymbol] = { U"",
+static const conststring32 Formula_instructionNames [] = { U"",
 	#define NAME_WITH_TENSORS(name)  \
 		U"" #name, U"" #name "#", U"" #name "##",
 
@@ -360,6 +362,8 @@ static const conststring32 Formula_instructionNames [1 + highestSymbol] = { U"",
 		U"createFolder", U"createDirectory", U"setWorkingDirectory", U"variableExists",
 		U"readFile", U"readFile$", U"readFile#", U"readFile##",
 		U"unicodeToBackslashTrigraphs$", U"backslashTrigraphsToUnicode$", U"environment$",
+		U"bigInteger$", U"half$", U"graphicalHalf$", U"single$", U"graphicalSingle$", U"double$", U"graphicalDouble$",
+		U"naturalLogarithm$", U"graphicalNaturalLogarithm$",
 	// HIGH_FUNCTION_STR1
 	U"date$", U"date_utc$", U"date_iso$", U"date_utc_iso$", U"date#", U"date_utc#", U"info$",
 	// LOW_FUNCTION_STR2
@@ -367,10 +371,10 @@ static const conststring32 Formula_instructionNames [1 + highestSymbol] = { U"",
 		U"startsWith", U"startsWith_caseInsensitive", U"endsWith", U"endsWith_caseInsensitive",
 		U"index_regex", U"rindex_regex", U"extractNumber",
 		U"moveAndOrRenameFile",
+		U"fixed$", U"percent$", U"graphicalPercent$", U"hexadecimal$",
 	// HIGH_FUNCTION_STR2
 	U"extractWord$", U"extractLine$",
 	U"replace$", U"replace_regex$",
-	U"fixed$", U"percent$", U"hexadecimal$",
 	U"sumOver",
 	U".",
 	U"_true", U"_false",
@@ -395,6 +399,7 @@ static const conststring32 Formula_instructionNames [1 + highestSymbol] = { U"",
 	U"a variable name", U"an indexed numeric variable", U"an indexed string variable",
 	U"the end of the formula"
 };
+static_assert (sizeof (Formula_instructionNames) == (1 + END_) * sizeof (conststring32));
 
 #define newlabel (-- ilabel)
 #define newread (lexan [++ ilexan]. symbol)
@@ -1687,13 +1692,6 @@ static void parsePowerFactor () {
 			fit (OPENING_PARENTHESIS_);
 			fit (CLOSING_PARENTHESIS_);
 		} else if (symbol == EXTRACT_WORD_STR_ || symbol == EXTRACT_LINE_STR_) {
-			const bool isParenthesis = fitArguments ();
-			parseExpression ();
-			fit (COMMA_);
-			parseExpression ();
-			if (isParenthesis)
-				fit (CLOSING_PARENTHESIS_);
-		} else if (symbol == FIXED_STR_ || symbol == PERCENT_STR_ || symbol == HEXADECIMAL_STR_) {
 			const bool isParenthesis = fitArguments ();
 			parseExpression ();
 			fit (COMMA_);
@@ -4436,6 +4434,7 @@ static void do_runScript () {
 	try {
 		const Editor optionalNewInterpreterOwningWindow = theInterpreter -> optionalDynamicEnvironmentEditor();
 		Melder_assert (theInterpreter -> owningInterpreterStack);
+		Melder_assert (theInterpreter -> owningInterpreterStack -> current_a() == theInterpreter);   // the parent interpreter
 		praat_runScript (theInterpreter -> owningInterpreterStack, fileName->getString(), numberOfArguments - 1, & theStack [stackPointer + 1], optionalNewInterpreterOwningWindow);
 		theLevel -= 1;
 	} catch (MelderError) {
@@ -6876,6 +6875,98 @@ static void do_percent_STR () {
 		Melder_throw (U"The function “percent$” requires two numbers (value and precision), not ", value->whichText(), U" and ", precision->whichText(), U".");
 	}
 }
+static void do_graphicalPercent_STR () {
+	const Stackel precision = pop, value = pop;
+	if (value->which == Stackel_NUMBER && precision->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_graphicalPercent (value->number, Melder_iround (precision->number)));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “graphicalPercent$” requires two numbers (value and precision), not ", value->whichText(), U" and ", precision->whichText(), U".");
+	}
+}
+static void do_bigInteger_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		if (value->number < INT54_MIN || value->number > INT54_MAX)
+			Melder_throw (U"bigInteger(): the number ", value->number, U" cannot be represented precisely as an integer.");
+		autostring32 result = Melder_dup (Melder_bigInteger (int64 (value->number)));   // guarded cast
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “bigInteger$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_half_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_half (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “half$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_graphicalHalf_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_graphicalHalf (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “graphicalHalf$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_single_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_single (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “single$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_graphicalSingle_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_graphicalSingle (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “graphicalSingle$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_double_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_double (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “double$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_graphicalDouble_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_graphicalDouble (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “graphicalDouble$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_naturalLogarithm_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_naturalLogarithm (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “naturalLogarithm$” requires a number, not ", value->whichText(), U".");
+	}
+}
+static void do_graphicalNaturalLogarithm_STR () {
+	const Stackel value = pop;
+	if (value->which == Stackel_NUMBER) {
+		autostring32 result = Melder_dup (Melder_graphicalNaturalLogarithm (value->number));
+		pushString (result.move());
+	} else {
+		Melder_throw (U"The function “graphicalNaturalLogarithm$” requires a number, not ", value->whichText(), U".");
+	}
+}
 static void do_hexadecimal_STR () {
 	const Stackel precision = pop, value = pop;
 	if (value->which == Stackel_NUMBER && precision->which == Stackel_NUMBER) {
@@ -6921,8 +7012,10 @@ static void do_createFolder () {
 	if (f->which == Stackel_STRING) {
 		structMelderFolder folder { };
 		Melder_relativePathToFolder (f->getString(), & folder);
-		Melder_checkTrust (theInterpreter, U"create the folder\n", & folder);
-		MelderFolder_create (& folder);
+		if (! MelderFolder_exists (& folder)) {   // don't check for trust if the folder exists
+			Melder_checkTrust (theInterpreter, U"create the folder\n", & folder);
+			MelderFolder_create (& folder);
+		}
 		pushNumber (1);
 	} else {
 		Melder_throw (U"The function “createFolder” requires a string, not ", f->whichText(), U".");
@@ -6935,8 +7028,10 @@ static void do_createDirectory () {
 	if (f->which == Stackel_STRING) {
 		structMelderFolder folder { };
 		Melder_relativePathToFolder (f->getString(), & folder);
-		Melder_checkTrust (theInterpreter, U"create the directory\n", & folder);
-		MelderFolder_create (& folder);
+		if (! MelderFolder_exists (& folder)) {   // don't check for trust if the folder exists
+			Melder_checkTrust (theInterpreter, U"create the directory\n", & folder);
+			MelderFolder_create (& folder);
+		}
 		pushNumber (1);
 	} else {
 		Melder_throw (U"The function “createDirectory” requires a string, not ", f->whichText(), U".");
@@ -9196,6 +9291,16 @@ CASE_NUM_WITH_TENSORS (LOG10_, do_log10)
 } break; case UNICODE_STR_: { do_unicode_STR ();
 } break; case FIXED_STR_: { do_fixed_STR ();
 } break; case PERCENT_STR_: { do_percent_STR ();
+} break; case GRAPHICAL_PERCENT_STR_: { do_graphicalPercent_STR ();
+} break; case BIG_INTEGER_STR_: { do_bigInteger_STR ();
+} break; case HALF_STR_: { do_half_STR ();
+} break; case GRAPHICAL_HALF_STR_: { do_graphicalHalf_STR ();
+} break; case SINGLE_STR_: { do_single_STR ();
+} break; case GRAPHICAL_SINGLE_STR_: { do_graphicalSingle_STR ();
+} break; case DOUBLE_STR_: { do_double_STR ();
+} break; case GRAPHICAL_DOUBLE_STR_: { do_graphicalDouble_STR ();
+} break; case NATURAL_LOGARITHM_STR_: { do_naturalLogarithm_STR ();
+} break; case GRAPHICAL_NATURAL_LOGARITHM_STR_: { do_graphicalNaturalLogarithm_STR ();
 } break; case HEXADECIMAL_STR_: { do_hexadecimal_STR ();
 } break; case DELETE_FILE_: { do_deleteFile ();
 } break; case MOVE_AND_OR_RENAME_FILE_: { do_moveAndOrRenameFile ();

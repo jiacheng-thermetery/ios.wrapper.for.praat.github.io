@@ -192,6 +192,7 @@ inline struct PraatP {
 	} commandLineOptions;
 	bool fileNamesCameInByDropping, foundTheOpenSwitch, foundTheRunSwitch, foundTheSendSwitch, foundTheSendOrFormSwitch, foundTheNewSwitch;
 	bool userWantsToOpen, userWantsToSend, userWantsToSendOrForm, userWantsExistingInstance, hasFinishedLaunching;
+	bool fullTrust;
 	bool dontUsePictureWindow;   // see praat_dontUsePictureWindow ()
 	bool ignorePreferenceFiles, ignorePlugins;
 	bool hasCommandLineInput;

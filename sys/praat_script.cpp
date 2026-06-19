@@ -599,9 +599,7 @@ void praat_runScript (InterpreterStack interpreterStack, conststring32 fileName,
 			Interpreter_readParameters (me.get(), text.get());   // TODO: should become a field of structInterpreter
 			my text = text.move();
 			Interpreter_getArgumentsFromArgs (me.get(), narg, args);   // interpret caller-relative paths for infile/outfile/folder arguments
-			autoScript script = Script_createFromFile (& file);
-			Script_rememberDuringThisAppSession_move (script.move());
-			my scriptReference = Script_find (MelderFile_peekPath (& file));
+			Interpreter_rememberScript (me.get(), & file, ! parentInterpreter -> scriptReference || parentInterpreter -> scriptReference -> trusted);
 			interpreterStack -> runDown (me.move(), autostring32(), false);   // back to the default directory of the caller
 		} catch (MelderError) {
 			Melder_throw (U"Script ", & file, U" not completed.");   // don't refer to 'fileName', because its contents may have changed
@@ -666,7 +664,7 @@ void praat_runNotebook (InterpreterStack interpreterStack, conststring32 fileNam
 	}
 }
 
-void praat_executeScriptFromCommandLine (conststring32 fileName, integer argc, char **argv) {
+void praat_executeScriptFromCommandLine (conststring32 fileName, integer argc, char **argv, bool fullTrust) {
 	static autoInterpreterStack interpreterStack = InterpreterStack_create (Editor (nullptr));
 	structMelderFile file { };
 	Melder_relativePathToFile (fileName, & file);
@@ -684,6 +682,7 @@ void praat_executeScriptFromCommandLine (conststring32 fileName, integer argc, c
 		Interpreter_readParameters (interpreter.get(), text.get());
 		Interpreter_getArgumentsFromCommandLine (interpreter.get(), argc, argv);   // interpret caller-relative paths for infile/outfile/folder arguments
 		autoMelderFileSetCurrentFolder folder (& file);   // so that script-relative file names can be used inside the script
+		Interpreter_rememberScript (interpreter.get(), & file, fullTrust);
 		interpreterStack -> runDown (interpreter.move(), text.move(), false);
 	} catch (MelderError) {
 		Melder_throw (U"Script ", & file, U" not completed.");   // don't refer to 'fileName', because its contents may have changed
@@ -893,10 +892,7 @@ static void firstPassThroughScript (MelderFile file, Editor optionalInterpreterO
 			optionalInterpreterOwningEditor,
 			file   // so that callee-relative file names can be used inside the script
 		);
-
-		autoScript script = Script_createFromFile (file);
-		Script_rememberDuringThisAppSession_move (script.move());
-		interpreter -> scriptReference = Script_find (MelderFile_peekPath (file));
+		Interpreter_rememberScript (interpreter.get(), file, false);   // this is early, but possible here because the name of the script cannot change
 
 		const integer numberOfParameters = Interpreter_readParameters (interpreter.get(), text.get());
 		if (numberOfParameters > 0) {

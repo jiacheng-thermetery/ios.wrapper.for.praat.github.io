@@ -41,14 +41,14 @@ struct SpeechSegment;
 void splitIntervalIntoWhisperSegments (IntervalTier tier, integer tierNumber,
 	double originalTmin, double originalTmax, autovector<SpeechSegment> const& segments);
 void TextGrid_Sound_transcribeInterval (TextGrid me, Sound sound, integer tierNumber, integer intervalNumber,
-	conststring32 modelName, conststring32 languageName, bool includeWords, bool diarize, bool useVad,
+	conststring32 modelName, conststring32 languageName, bool includeWords, bool useVad,
 	double speechProbabilityThreshold, double minNonSpeechDuration, double minSpeechDuration, double speechPad,
-	integer numSpeakers, integer minSpeakers, integer maxSpeakers, bool allowSpeakersOverlap,
+	bool includeDiarization, integer maxNumSpeakers, bool allowSpeakersOverlap,
 	double clusterThreshold, double segmentationStep
 );
 void TextGrid_Sound_diarizeInterval (TextGrid me, Sound sound, integer tierNumber, integer intervalNumber,
-	integer numSpeakers, integer minSpeakers, integer maxSpeakers, bool allowSpeakersOverlap,
-	conststring32 nonSpeechLabel, conststring32 speechLabel, double clusterThreshold, double segmentationStep
+	integer maxNumSpeakers, bool allowSpeakersOverlap, conststring32 nonSpeechLabel, conststring32 speechLabel,
+	double clusterThreshold, double segmentationStep
 );
 
 autoSound Sound_readWithAdjacentAnnotationFiles_buckeye (conststring32 soundFileName, autoTextGrid *out_textgrid);

@@ -154,6 +154,15 @@ void Interpreters_undangleEnvironment (Editor environment) noexcept {
 	}
 }
 
+void Interpreter_rememberScript (Interpreter me, MelderFile scriptFile, const bool fullTrust) {
+	if (MelderFile_isNull (scriptFile))
+		return;
+	autoScript script = Script_createFromFile (scriptFile);
+	Script_rememberDuringThisAppSession_move (script.move());
+	my scriptReference = Script_find (MelderFile_peekPath (scriptFile));
+	my scriptReference -> trusted |= fullTrust;
+}
+
 static bool Melder_scriptTextIsNotebookText (conststring32 text) {
 	/*
 		Notebooks start with a opening double quote.
@@ -713,7 +722,8 @@ autoUiForm Interpreter_createForm (Interpreter me, GuiWindow parent, Editor opti
 {
 	autoUiForm form = UiForm_create (parent, optionalEditor,
 		Melder_cat (selectionOnly ? U"Run script (selection only): " : U"Run script: ", my dialogTitle.get()),
-		okCallback, okClosure, nullptr, nullptr);
+		okCallback, okClosure, nullptr, nullptr
+	);
 	if (path)
 		form -> scriptFilePath = Melder_dup (path);
 	for (int ipar = 1; ipar <= my numberOfParameters; ipar ++) {

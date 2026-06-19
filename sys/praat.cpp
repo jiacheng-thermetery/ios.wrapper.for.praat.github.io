@@ -1124,9 +1124,10 @@ static void printHelp () {
 	MelderInfo_writeLine (U"      praat --help");
 	MelderInfo_writeLine (U"");
 	MelderInfo_writeLine (U"Options:");
+	MelderInfo_writeLine (U"  --FULL-TRUST     allow this script to save files and run system commands");
 	MelderInfo_writeLine (U"  --no-pref-files  don't read or write the preferences file and the buttons file");
 	MelderInfo_writeLine (U"  --no-plugins     don't activate the plugins");
-	MelderInfo_writeLine (U"  --pref-dir=DIR   set the preferences folder to DIR");
+	MelderInfo_writeLine (U"  --pref-dir=<DIR> set the preferences folder to <DIR>");
 	MelderInfo_writeLine (U"  -u, --utf16      use UTF-16LE output encoding, no BOM (the default on Windows)");
 	MelderInfo_writeLine (U"  -8, --utf8       use UTF-8 output encoding (the default on MacOS and Linux)");
 	MelderInfo_writeLine (U"  -a, --ansi       use ISO Latin-1 output encoding (lossy, hence not recommended)");
@@ -1468,6 +1469,9 @@ static void interpretCommandLineArguments (bool weWereStartedFromTheCommandLine,
 		} else if (strequ (argv [praatP.argumentNumber], "--new-send-or-form")) {
 			praatP.foundTheNewSwitch = true;
 			praatP.foundTheSendOrFormSwitch = true;
+			praatP.argumentNumber += 1;
+		} else if (strequ (argv [praatP.argumentNumber], "--FULL-TRUST")) {
+			praatP.fullTrust = true;
 			praatP.argumentNumber += 1;
 		} else if (strequ (argv [praatP.argumentNumber], "--no-pref-files")) {
 			praatP.ignorePreferenceFiles = true;
@@ -2535,7 +2539,7 @@ void praat_run () {
 						Melder_casual (U" ########## Running Praat script ", theCurrentPraatApplication -> batchName.string);
 				#endif
 				praat_executeScriptFromCommandLine (theCurrentPraatApplication -> batchName.string,
-						praatP.argc - praatP.argumentNumber, & praatP.argv [praatP.argumentNumber]);
+						praatP.argc - praatP.argumentNumber, & praatP.argv [praatP.argumentNumber], praatP.fullTrust);
 				#ifdef _WIN32
 					/*
 						Chunk 2 (faking an Enter):
@@ -2548,7 +2552,7 @@ void praat_run () {
 				praat_exit (0);
 			} catch (MelderError) {
 				Melder_flushError (Melder_upperCaseAppName(), U": script command <<",
-					theCurrentPraatApplication -> batchName.string, U">> not completed.");
+						theCurrentPraatApplication -> batchName.string, U">> not completed.");
 				praat_exit (-1);
 			}
 		}
@@ -2613,7 +2617,7 @@ void praat_run () {
 			autoPraatBackground background;   // to e.g. make audio synchronous
 			try {
 				praat_executeScriptFromCommandLine (theCurrentPraatApplication -> batchName.string,
-						praatP.argc - praatP.argumentNumber, & praatP.argv [praatP.argumentNumber]);
+						praatP.argc - praatP.argumentNumber, & praatP.argv [praatP.argumentNumber], praatP.fullTrust);
 			} catch (MelderError) {
 				Melder_flushError ();
 			}

@@ -2,11 +2,11 @@
 #define _melder_ftoa_h_
 /* melder_ftoa.h
  *
- * Copyright (C) 1992-2019,2021 Paul Boersma
+ * Copyright (C) 1992-2019,2021,2024,2026 Paul Boersma
  *
  * This code is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or (at
+ * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
  *
  * This code is distributed in the hope that it will be useful, but
@@ -81,8 +81,8 @@ conststring8 Melder8_percent (double value, integer precision);
 /*
 	Format an integer as a hexadecimal number. If precision is 4, you get things like "0000" or "1A3C" or "107FFFF".
 */
-conststring8 Melder8_hexadecimal (integer value, integer precision);
 conststring32 Melder_hexadecimal (integer value, integer precision);
+conststring8 Melder8_hexadecimal (integer value, integer precision);
 
 /*
 	Format a dcomplex value as "--undefined--" or something in the "%.15g", "%.16g", or "%.17g" formats,
@@ -99,17 +99,26 @@ conststring32 Melder_scomplex (dcomplex value);
 conststring8 Melder8_scomplex (dcomplex value);
 
 /*
-	Convert a formatted floating-point string to something suitable for visualization with the Graphics library.
-	For instance, "1e+4" is turned into "10^^4", and "-1.23456e-78" is turned into "-1.23456\.c10^^-78".
-*/
-conststring32 Melder_float (conststring32 number);
-
-/*
 	Format the number that is specified by its natural logarithm.
 	For instance, -10000 is formatted as "1.135483865315339e-4343", which is a floating-point representation of exp(-10000).
 */
 conststring32 Melder_naturalLogarithm (double lnNumber);
 conststring8 Melder8_naturalLogarithm (double lnNumber);
+
+/*
+	Convert a formatted floating-point string to something suitable for visualization with the Graphics library.
+	For instance, "1e+4" is turned into "10^^4^", and "-1.23456e-78" is turned into "-1.23456\.c10^^-78^".
+*/
+conststring32 Melder_graphicalHalf (double number);
+conststring8 Melder8_graphicalHalf (double number);
+conststring32 Melder_graphicalSingle (double number);
+conststring8 Melder8_graphicalSingle (double number);
+conststring32 Melder_graphicalDouble (double number);
+conststring8 Melder8_graphicalDouble (double number);
+conststring32 Melder_graphicalPercent (double number, integer precision);
+conststring8 Melder8_graphicalPercent (double number, integer precision);
+conststring32 Melder_graphicalNaturalLogarithm (double number);
+conststring8 Melder8_graphicalNaturalLogarithm (double number);
 
 conststring32 Melder_pointer (const void *pointer);
 conststring8 Melder8_pointer (const void *pointer);
