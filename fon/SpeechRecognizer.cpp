@@ -736,7 +736,7 @@ extern unsigned char model_ggml_embedding_data[];
 extern unsigned int model_ggml_embedding_length;
 
 autovector <autovector <SpeechSegment>> doDiarization (constSound sound,
-	const integer numSpeakers, const integer minSpeakers, const integer maxSpeakers, const bool allowSpeakersOverlap,
+	const integer maxNumSpeakers, const bool allowSpeakersOverlap,
 	const double clusterThreshold, const double segmentationStep,
 	const conststring32 nonSpeechLabel, const conststring32 speechLabel
 ) {
@@ -762,10 +762,8 @@ autovector <autovector <SpeechSegment>> doDiarization (constSound sound,
 			);
 		diarize_full_params diarizeParams = diarize_default_params ();
 		diarizeParams. n_threads = static_cast<int> (n_threads);
-		diarizeParams. num_speakers = static_cast <int> (numSpeakers);
-		diarizeParams. max_speakers = static_cast <int> (maxSpeakers);
-		diarizeParams. min_speakers = static_cast <int> (minSpeakers);
-		diarizeParams. max_simultaneous_speakers = allowSpeakersOverlap ? INT12_MAX : 1;
+		diarizeParams. max_speakers = static_cast <int> (maxNumSpeakers);
+		diarizeParams. max_simultaneous_speakers = allowSpeakersOverlap ? 2 : 1;
 		diarizeParams. cluster_threshold = static_cast <float> (clusterThreshold);
 		diarizeParams. seg_step_ratio = static_cast <float> (segmentationStep);
 		diarize_full (diarizeContext.get(), diarizeParams,samples32.asArgumentToFunctionThatExpectsZeroBasedArray(),
